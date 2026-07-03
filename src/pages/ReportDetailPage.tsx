@@ -7,29 +7,56 @@ import { AppShell } from '@/components/admin/AppShell';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Avatar } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/admin/StatusBadge';
+import { FormModal, type ModalConfig } from '@/components/admin/FormModal';
 
 export default function ReportDetailPage() {
   const { t } = useI18n();
   const { reportId } = useParams<{ reportId: string }>();
   const [detail, setDetail] = useState<ReportDetail | null>(null);
-  const [chat, setChat] = useState<{ senderId: string; text: string; sentAt: string | null }[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const [note, setNote] = useState('');
+  const [savedNote, setSavedNote] = useState(false);
 
   const load = useCallback(() => {
-    adminApi.report(reportId!).then(setDetail)
+    adminApi.report(reportId!).then((d) => { setDetail(d); setNote(d.handlerNote ?? ''); })
       .catch((err) => setError(err instanceof Error ? err.message : t('error')));
-    adminApi.chatTranscript(reportId!).then((res) => setChat(res.messages)).catch(() => setChat([]));
   }, [reportId, t]);
   useEffect(() => { load(); }, [load]);
 
-  async function action(actionType: string) {
-    const note = window.prompt(t('handlingNote')) ?? '';
+  async function saveNote() {
     setBusy(true);
-    try { await adminApi.reportAction(reportId!, actionType, note); load(); }
-    catch (err) { setError(err instanceof Error ? err.message : t('error')); }
-    finally { setBusy(false); }
+    setError('');
+    try {
+      await adminApi.setReportNote(reportId!, note);
+      setSavedNote(true);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('error'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function action(actionType: string, label: string, destructive = false) {
+    setModal({
+      title: label,
+      description: t('handlingNote'),
+      destructive,
+      submitLabel: label,
+      fields: [{ name: 'note', label: t('handlingNote'), kind: 'textarea' }],
+      onSubmit: async (v) => {
+        setBusy(true);
+        try { await adminApi.reportAction(reportId!, actionType, v.note ?? ''); load(); }
+        catch (err) { setError(err instanceof Error ? err.message : t('error')); throw err; }
+        finally { setBusy(false); }
+      },
+    });
   }
 
   return (
@@ -58,35 +85,26 @@ export default function ReportDetailPage() {
                   ))}
                 </div>
               )}
-              {chat.length > 0 && (
-                <>
-                  <h3 className="mb-3 text-sm font-semibold">{t('chatTranscript')}</h3>
-                  <div className="max-h-80 overflow-auto rounded-lg border border-border bg-muted/30 p-4">
-                    <ul className="space-y-2 text-sm">
-                      {chat.map((m, i) => (
-                        <li key={`${m.sentAt}-${i}`}>
-                          <span className="font-mono text-xs text-muted-foreground">{m.senderId.slice(0, 8)}</span>{' '}
-                          <span>{m.text}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
-              )}
             </Card>
 
             <div className="space-y-4">
               <Card className="p-5">
                 <h3 className="mb-3 text-sm font-semibold">{t('parties')}</h3>
-                <dl className="space-y-2 text-sm">
+                <dl className="space-y-3 text-sm">
                   <div>
                     <dt className="text-xs text-muted-foreground">{t('reporter')}</dt>
-                    <dd className="font-medium">{detail.reporter.nickname} <span className="text-muted-foreground">({detail.reporter.phone})</span></dd>
+                    <dd className="mt-1 flex items-center gap-2 font-medium">
+                      <Avatar src={detail.reporter.avatarUrl} name={detail.reporter.nickname} size={32} />
+                      <span>{detail.reporter.nickname} <span className="text-muted-foreground">({detail.reporter.phone})</span></span>
+                    </dd>
                   </div>
                   {detail.reportedUser && (
                     <div>
                       <dt className="text-xs text-muted-foreground">{t('reportedUser')}</dt>
-                      <dd className="font-medium">{detail.reportedUser.nickname} <span className="text-muted-foreground">({detail.reportedUser.phone})</span></dd>
+                      <dd className="mt-1 flex items-center gap-2 font-medium">
+                        <Avatar src={detail.reportedUser.avatarUrl} name={detail.reportedUser.nickname} size={32} />
+                        <span>{detail.reportedUser.nickname} <span className="text-muted-foreground">({detail.reportedUser.phone})</span></span>
+                      </dd>
                     </div>
                   )}
                 </dl>
@@ -95,17 +113,34 @@ export default function ReportDetailPage() {
               <Card className="p-5">
                 <h3 className="mb-3 text-sm font-semibold">{t('takeAction')}</h3>
                 <div className="grid gap-2">
-                  <Button onClick={() => action('ignore')} disabled={busy} variant="outline">{t('ignore')}</Button>
-                  <Button onClick={() => action('warn')} disabled={busy} variant="outline">{t('warn')}</Button>
-                  <Button onClick={() => action('remove_content')} disabled={busy} variant="outline">{t('removeContent')}</Button>
-                  <Button onClick={() => action('restore_content')} disabled={busy} variant="outline">{t('restoreContent')}</Button>
-                  <Button onClick={() => action('ban_user')} disabled={busy} variant="destructive">{t('banUser')}</Button>
+                  <Button onClick={() => action('ignore', t('ignore'))} disabled={busy} variant="outline" className="hover:border-[#7ad80b] hover:bg-[#7ad80b] hover:text-black">{t('ignore')}</Button>
+                  <Button onClick={() => action('warn', t('warn'))} disabled={busy} variant="outline" className="hover:border-[#7ad80b] hover:bg-[#7ad80b] hover:text-black">{t('warn')}</Button>
+                  <Button onClick={() => action('remove_content', t('removeContent'))} disabled={busy} variant="outline" className="hover:border-[#7ad80b] hover:bg-[#7ad80b] hover:text-black">{t('removeContent')}</Button>
+                  <Button onClick={() => action('restore_content', t('restoreContent'))} disabled={busy} variant="outline" className="hover:border-[#7ad80b] hover:bg-[#7ad80b] hover:text-black">{t('restoreContent')}</Button>
+                  <Button onClick={() => action('ban_user', t('banUser'), true)} disabled={busy} variant="destructive">{t('banUser')}</Button>
+                </div>
+              </Card>
+
+              <Card className="p-5">
+                <Label htmlFor="report-note" className="text-sm font-semibold">{t('handlingNote')}</Label>
+                <Textarea
+                  id="report-note"
+                  value={note}
+                  onChange={(e) => { setNote(e.target.value); setSavedNote(false); }}
+                  rows={4}
+                  placeholder={t('notePlaceholder')}
+                  className="mt-2"
+                />
+                <div className="mt-3 flex items-center gap-3">
+                  <Button onClick={saveNote} disabled={busy} size="sm">{t('saveNote')}</Button>
+                  {savedNote ? <span className="text-xs text-muted-foreground">{t('noteSaved')}</span> : null}
                 </div>
               </Card>
             </div>
           </div>
         </>
       )}
+      <FormModal config={modal} onClose={() => setModal(null)} />
     </AppShell>
   );
 }

@@ -20,21 +20,6 @@ export function StatCard({
   hint?: string;
   accent?: "primary" | "success" | "warning" | "danger" | "info";
 }) {
-  const accentIcon: Record<NonNullable<typeof accent>, string> = {
-    primary: "bg-primary/10 text-primary",
-    success: "bg-success/15 text-success-foreground dark:text-success",
-    warning: "bg-warning/20 text-warning-foreground dark:text-warning",
-    danger: "bg-destructive/10 text-destructive",
-    info: "bg-info/15 text-info-foreground dark:text-info",
-  };
-  const accentRail: Record<NonNullable<typeof accent>, string> = {
-    primary: "bg-primary",
-    success: "bg-success",
-    warning: "bg-warning",
-    danger: "bg-destructive",
-    info: "bg-info",
-  };
-
   const TrendIcon = trend
     ? trend.direction === "up"
       ? ArrowUpRight
@@ -52,12 +37,12 @@ export function StatCard({
   return (
     <Card className="relative overflow-hidden border-border/70 bg-card p-4 shadow-[var(--shadow-card)] transition-colors hover:border-border">
       {accent ? (
-        <span className={cn("absolute inset-y-0 left-0 w-0.5", accentRail[accent])} aria-hidden />
+        <span className="absolute inset-y-0 left-0 w-1 bg-[#7AD80B]" aria-hidden />
       ) : null}
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
         {icon ? (
-          <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-md", accent ? accentIcon[accent] : "bg-muted text-muted-foreground")}>
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
             {icon}
           </span>
         ) : null}

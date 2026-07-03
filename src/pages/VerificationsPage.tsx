@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Clock, Check, X } from 'lucide-react';
 import { adminApi, type VerificationRow } from '@/api/client';
 import { useI18n } from '@/i18n';
 import { AppShell } from '@/components/admin/AppShell';
@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/admin/StatusBadge';
 import { EmptyState } from '@/components/admin/EmptyState';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 
 export default function VerificationsPage() {
   const { t } = useI18n();
@@ -32,18 +33,26 @@ export default function VerificationsPage() {
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
-          { label: t('statPending'), value: pending, tone: 'warning' as const },
-          { label: t('statApproved'), value: approved, tone: 'success' as const },
-          { label: t('statRejected'), value: rejected, tone: 'danger' as const },
-        ].map((c) => (
-          <Card key={c.label} className="flex items-center justify-between p-4">
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">{c.label}</p>
-              <p className="mt-1 text-2xl font-semibold">{c.value}</p>
-            </div>
-            <StatusBadge status={c.tone === 'warning' ? 'pending' : c.tone === 'success' ? 'approved' : 'rejected'} />
-          </Card>
-        ))}
+          { label: t('statPending'), value: pending, icon: Clock },
+          { label: t('statApproved'), value: approved, icon: Check },
+          { label: t('statRejected'), value: rejected, icon: X },
+        ].map((c) => {
+          const Icon = c.icon;
+          return (
+            <Card
+              key={c.label}
+              className="flex items-center justify-between border-[#7ad80b] p-4 transition-all hover:bg-[#7ad80b]/20 hover:backdrop-blur-sm hover:shadow-lg hover:shadow-[#7ad80b]/40"
+            >
+              <div>
+                <p className="text-xs uppercase text-muted-foreground">{c.label}</p>
+                <p className="mt-1 text-2xl font-semibold">{c.value}</p>
+              </div>
+              <span className="grid h-9 w-9 place-items-center rounded-md bg-muted text-muted-foreground">
+                <Icon className="h-5 w-5" strokeWidth={2} />
+              </span>
+            </Card>
+          );
+        })}
       </div>
 
       {error ? <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
@@ -63,7 +72,12 @@ export default function VerificationsPage() {
           <TBody>
             {items.map((row) => (
               <TR key={row.id}>
-                <TD className="font-medium">{row.nickname}</TD>
+                <TD className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <Avatar src={row.avatarUrl} name={row.nickname} size={28} />
+                    <span>{row.nickname ?? '—'}</span>
+                  </div>
+                </TD>
                 <TD>{row.phone}</TD>
                 <TD>{row.legalName}</TD>
                 <TD><StatusBadge status={row.status} /></TD>

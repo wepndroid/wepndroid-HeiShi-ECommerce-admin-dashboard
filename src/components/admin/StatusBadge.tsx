@@ -12,15 +12,6 @@ const TONE_CLASS: Record<Tone, string> = {
   primary: 'bg-primary/10 text-primary ring-primary/20',
 };
 
-const TONE_DOT: Record<Tone, string> = {
-  success: 'bg-success',
-  warning: 'bg-warning',
-  danger: 'bg-destructive',
-  info: 'bg-info',
-  neutral: 'bg-muted-foreground/60',
-  primary: 'bg-primary',
-};
-
 const STATUS_TONE: Record<string, Tone> = {
   approved: 'success',
   active: 'success',
@@ -73,12 +64,11 @@ export function StatusBadge({ status, className }: { status: string | null | und
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset whitespace-nowrap',
+        'inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset whitespace-nowrap',
         TONE_CLASS[tone],
         className,
       )}
     >
-      <span className={cn('h-1.5 w-1.5 rounded-full', TONE_DOT[tone])} aria-hidden />
       {label}
     </span>
   );

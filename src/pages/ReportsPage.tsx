@@ -9,7 +9,9 @@ import { DataTable, TBody, TD, TH, THead, TR } from '@/components/admin/DataTabl
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { EmptyState } from '@/components/admin/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Avatar } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
+import type { Messages } from '@/i18n/en';
 
 function priorityFor(reason: string): 'high' | 'medium' | 'low' {
   const r = reason.toLowerCase();
@@ -18,11 +20,19 @@ function priorityFor(reason: string): 'high' | 'medium' | 'low' {
   return 'low';
 }
 
-function priorityLabel(p: 'high' | 'medium' | 'low', t: ReturnType<typeof useI18n>['t']) {
-  if (p === 'high') return t('priorityHigh');
-  if (p === 'medium') return t('priorityMedium');
-  return t('priorityLow');
-}
+const PRIORITY_DOT: Record<'high' | 'medium' | 'low', string> = {
+  high: 'bg-destructive',
+  medium: 'bg-warning',
+  low: 'bg-muted-foreground/50',
+};
+
+const TARGET_LABEL: Record<string, keyof Messages> = {
+  listing: 'reportTargetListing',
+  service: 'reportTargetService',
+  user: 'reportTargetUser',
+  chat: 'reportTargetChat',
+  order: 'reportTargetOrder',
+};
 
 export default function ReportsPage() {
   const { t } = useI18n();
@@ -44,7 +54,8 @@ export default function ReportsPage() {
       ) : (
         <DataTable>
           <THead>
-            <TH>{t('priority')}</TH>
+            <TH>{t('reportId')}</TH>
+            <TH>{t('type')}</TH>
             <TH>{t('target')}</TH>
             <TH>{t('reporter')}</TH>
             <TH>{t('reason')}</TH>
@@ -55,17 +66,28 @@ export default function ReportsPage() {
           <TBody>
             {items.map((row) => {
               const p = priorityFor(row.reason);
+              const targetKey = TARGET_LABEL[row.targetType];
               return (
                 <TR key={row.id}>
-                  <TD>
-                    <Badge variant="outline" className={
-                      p === 'high' ? 'border-destructive/30 bg-destructive/10 text-destructive'
-                        : p === 'medium' ? 'border-warning/40 bg-warning/15 text-warning-foreground dark:text-warning'
-                        : 'border-border bg-muted text-muted-foreground'
-                    }>{priorityLabel(p, t)}</Badge>
+                  <TD className="font-mono text-xs">
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className={cn('h-1.5 w-1.5 shrink-0 rounded-full', PRIORITY_DOT[p])}
+                        title={t(p === 'high' ? 'priorityHigh' : p === 'medium' ? 'priorityMedium' : 'priorityLow')}
+                        aria-hidden
+                      />
+                      #{row.id}
+                    </span>
                   </TD>
-                  <TD className="text-xs"><span className="rounded bg-muted px-1.5 py-0.5 font-mono">{row.targetType}</span> #{row.targetId}</TD>
-                  <TD>{row.reporter}</TD>
+                  <TD>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium">
+                      {targetKey ? t(targetKey) : row.targetType}
+                    </span>
+                  </TD>
+                  <TD className="font-mono text-xs text-muted-foreground">#{row.targetId}</TD>
+                  <TD>
+                    <span className="flex items-center gap-2"><Avatar src={row.reporter.avatarUrl} name={row.reporter.nickname} size={24} />{row.reporter.nickname}</span>
+                  </TD>
                   <TD className="max-w-[260px] truncate">{row.reason}</TD>
                   <TD><StatusBadge status={row.status} /></TD>
                   <TD className="text-muted-foreground">{row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}</TD>

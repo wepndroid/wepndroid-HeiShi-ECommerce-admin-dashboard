@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataTable, TBody, TD, TH, THead, TR } from '@/components/admin/DataTable';
 import { StatusBadge } from '@/components/admin/StatusBadge';
+import { FormModal, type ModalConfig } from '@/components/admin/FormModal';
 
 const CATEGORY_TYPES = ['product', 'service', 'job', 'rental'] as const;
 
@@ -19,6 +20,16 @@ export default function ConfigPage() {
   const [regions, setRegions] = useState<RegionRow[]>([]);
   const [banners, setBanners] = useState<BannerRow[]>([]);
   const [error, setError] = useState('');
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const typeOptions = CATEGORY_TYPES.map((v) => ({ value: v, label: v }));
+  const positionOptions = [
+    { value: 'home', label: t('positionHome') },
+    { value: 'category', label: t('positionCategory') },
+  ];
+  const boolOptions = [
+    { value: 'n', label: t('no') },
+    { value: 'y', label: t('yes') },
+  ];
 
   const load = useCallback(() => {
     Promise.all([adminApi.categories(), adminApi.regions(), adminApi.banners()])
@@ -31,79 +42,142 @@ export default function ConfigPage() {
   async function toggleRegion(row: RegionRow) { await adminApi.patchRegion(row.id, { enabled: !row.enabled }); load(); }
   async function toggleBanner(row: BannerRow) { await adminApi.patchBanner(row.id, { enabled: !row.enabled }); load(); }
 
-  async function addCategory() {
-    const key = window.prompt(t('key')); if (!key?.trim()) return;
-    const typeRaw = window.prompt(t('pickCategoryType'), 'product') ?? 'product';
-    if (!CATEGORY_TYPES.includes(typeRaw as (typeof CATEGORY_TYPES)[number])) return;
-    await adminApi.createCategory({
-      type: typeRaw as (typeof CATEGORY_TYPES)[number],
-      key: key.trim(),
-      labelEn: key.trim(),
-      labelZh: key.trim(),
-      sortOrder: categories.length,
-      enabled: true,
+  function addCategory() {
+    setModal({
+      title: `${t('add')} · ${t('categories')}`,
+      submitLabel: t('add'),
+      fields: [
+        { name: 'key', label: t('key'), required: true },
+        { name: 'type', label: t('type'), kind: 'select', options: typeOptions },
+        { name: 'labelEn', label: t('labelEn'), required: true },
+        { name: 'labelZh', label: t('labelZh'), required: true },
+      ],
+      onSubmit: async (v) => {
+        await adminApi.createCategory({
+          type: v.type as (typeof CATEGORY_TYPES)[number],
+          key: v.key.trim(),
+          labelEn: v.labelEn.trim(),
+          labelZh: v.labelZh.trim(),
+          sortOrder: categories.length,
+          enabled: true,
+        });
+        load();
+      },
     });
-    load();
   }
-  async function editCategory(row: CategoryRow) {
-    const labelEn = window.prompt(t('labelEn'), row.labelEn); if (labelEn == null) return;
-    const labelZh = window.prompt(t('labelZh'), row.labelZh); if (labelZh == null) return;
-    const sortRaw = window.prompt(t('sortOrder'), String(row.sortOrder)); if (sortRaw == null) return;
-    const sortOrder = Number(sortRaw); if (!Number.isFinite(sortOrder)) return;
-    await adminApi.patchCategory(row.id, { labelEn: labelEn.trim(), labelZh: labelZh.trim(), sortOrder }); load();
-  }
-  async function addRegion() {
-    const country = window.prompt(t('country'), 'AU'); if (!country?.trim()) return;
-    const state = window.prompt(t('state')); if (!state?.trim()) return;
-    const city = window.prompt(t('city')); if (!city?.trim()) return;
-    const area = window.prompt(t('areaOptional')) ?? '';
-    const labelEn = window.prompt(t('labelEn'), city.trim()) ?? city.trim();
-    const labelZh = window.prompt(t('labelZh'), city.trim()) ?? city.trim();
-    await adminApi.createRegion({ country: country.trim(), state: state.trim(), city: city.trim(), area: area.trim() || null, labelEn, labelZh, isDefaultCity: false, sortOrder: regions.length, enabled: true }); load();
-  }
-  async function editRegion(row: RegionRow) {
-    const labelEn = window.prompt(t('labelEn'), row.labelEn); if (labelEn == null) return;
-    const labelZh = window.prompt(t('labelZh'), row.labelZh); if (labelZh == null) return;
-    const sortRaw = window.prompt(t('sortOrder'), String(row.sortOrder)); if (sortRaw == null) return;
-    const sortOrder = Number(sortRaw); if (!Number.isFinite(sortOrder)) return;
-    const defaultRaw = window.prompt(t('setDefaultCity'), row.isDefaultCity ? 'y' : 'n') ?? 'n';
-    await adminApi.patchRegion(row.id, { labelEn: labelEn.trim(), labelZh: labelZh.trim(), sortOrder, isDefaultCity: defaultRaw.toLowerCase().startsWith('y') }); load();
-  }
-  async function addBanner() {
-    const title = window.prompt(t('title'));
-    const imageUrl = window.prompt(t('imageUrl'));
-    const linkUrl = window.prompt(t('linkUrl')) ?? '';
-    const position = window.prompt(`${t('position')} (home/category)`, 'home') ?? 'home';
-    const onlineAt = window.prompt(t('onlineAt')) ?? '';
-    const offlineAt = window.prompt(t('offlineAt')) ?? '';
-    if (!title?.trim() || !imageUrl?.trim()) return;
-    await adminApi.createBanner({
-      title: title.trim(),
-      imageUrl: imageUrl.trim(),
-      linkUrl: linkUrl.trim() || null,
-      position: position === 'category' ? 'category' : 'home',
-      onlineAt: onlineAt.trim() || null,
-      offlineAt: offlineAt.trim() || null,
-      enabled: true,
+  function editCategory(row: CategoryRow) {
+    setModal({
+      title: `${t('edit')} · ${row.key}`,
+      submitLabel: t('save'),
+      fields: [
+        { name: 'labelEn', label: t('labelEn'), initialValue: row.labelEn, required: true },
+        { name: 'labelZh', label: t('labelZh'), initialValue: row.labelZh, required: true },
+        { name: 'sortOrder', label: t('sortOrder'), initialValue: String(row.sortOrder), required: true },
+      ],
+      onSubmit: async (v) => {
+        const sortOrder = Number(v.sortOrder);
+        if (!Number.isFinite(sortOrder)) return;
+        await adminApi.patchCategory(row.id, { labelEn: v.labelEn.trim(), labelZh: v.labelZh.trim(), sortOrder });
+        load();
+      },
     });
-    load();
   }
-  async function editBanner(row: BannerRow) {
-    const title = window.prompt(t('title'), row.title); if (title == null) return;
-    const imageUrl = window.prompt(t('imageUrl'), row.imageUrl); if (imageUrl == null) return;
-    const linkUrl = window.prompt(t('linkUrl'), row.linkUrl ?? ''); if (linkUrl == null) return;
-    const position = window.prompt(`${t('position')} (home/category)`, row.position); if (position == null) return;
-    const onlineAt = window.prompt(t('onlineAt'), row.onlineAt ?? ''); if (onlineAt == null) return;
-    const offlineAt = window.prompt(t('offlineAt'), row.offlineAt ?? ''); if (offlineAt == null) return;
-    await adminApi.patchBanner(row.id, {
-      title: title.trim(),
-      imageUrl: imageUrl.trim(),
-      linkUrl: linkUrl.trim() || null,
-      position: position === 'category' ? 'category' : 'home',
-      onlineAt: onlineAt.trim() || null,
-      offlineAt: offlineAt.trim() || null,
+  function addRegion() {
+    setModal({
+      title: `${t('add')} · ${t('regions')}`,
+      submitLabel: t('add'),
+      fields: [
+        { name: 'country', label: t('country'), initialValue: 'AU', required: true },
+        { name: 'state', label: t('state'), required: true },
+        { name: 'city', label: t('city'), required: true },
+        { name: 'area', label: t('areaOptional') },
+        { name: 'labelEn', label: t('labelEn'), required: true },
+        { name: 'labelZh', label: t('labelZh'), required: true },
+      ],
+      onSubmit: async (v) => {
+        await adminApi.createRegion({
+          country: v.country.trim(),
+          state: v.state.trim(),
+          city: v.city.trim(),
+          area: v.area.trim() || null,
+          labelEn: v.labelEn.trim() || v.city.trim(),
+          labelZh: v.labelZh.trim() || v.city.trim(),
+          isDefaultCity: false,
+          sortOrder: regions.length,
+          enabled: true,
+        });
+        load();
+      },
     });
-    load();
+  }
+  function editRegion(row: RegionRow) {
+    setModal({
+      title: `${t('edit')} · ${row.city}`,
+      submitLabel: t('save'),
+      fields: [
+        { name: 'labelEn', label: t('labelEn'), initialValue: row.labelEn, required: true },
+        { name: 'labelZh', label: t('labelZh'), initialValue: row.labelZh, required: true },
+        { name: 'sortOrder', label: t('sortOrder'), initialValue: String(row.sortOrder), required: true },
+        { name: 'isDefaultCity', label: t('setDefaultCity'), kind: 'select', options: boolOptions, initialValue: row.isDefaultCity ? 'y' : 'n' },
+      ],
+      onSubmit: async (v) => {
+        const sortOrder = Number(v.sortOrder);
+        if (!Number.isFinite(sortOrder)) return;
+        await adminApi.patchRegion(row.id, { labelEn: v.labelEn.trim(), labelZh: v.labelZh.trim(), sortOrder, isDefaultCity: v.isDefaultCity === 'y' });
+        load();
+      },
+    });
+  }
+  function addBanner() {
+    setModal({
+      title: `${t('add')} · ${t('banners')}`,
+      submitLabel: t('add'),
+      fields: [
+        { name: 'title', label: t('title'), required: true },
+        { name: 'imageUrl', label: t('uploadImage'), kind: 'file', required: true },
+        { name: 'linkUrl', label: t('linkUrl') },
+        { name: 'position', label: t('position'), kind: 'select', options: positionOptions },
+        { name: 'onlineAt', label: t('onlineAt') },
+        { name: 'offlineAt', label: t('offlineAt') },
+      ],
+      onSubmit: async (v) => {
+        await adminApi.createBanner({
+          title: v.title.trim(),
+          imageUrl: v.imageUrl.trim(),
+          linkUrl: v.linkUrl.trim() || null,
+          position: v.position === 'category' ? 'category' : 'home',
+          onlineAt: v.onlineAt.trim() || null,
+          offlineAt: v.offlineAt.trim() || null,
+          enabled: true,
+        });
+        load();
+      },
+    });
+  }
+  function editBanner(row: BannerRow) {
+    setModal({
+      title: `${t('edit')} · ${row.title}`,
+      submitLabel: t('save'),
+      fields: [
+        { name: 'title', label: t('title'), initialValue: row.title, required: true },
+        { name: 'imageUrl', label: t('uploadImage'), kind: 'file', initialValue: row.imageUrl, required: true },
+        { name: 'linkUrl', label: t('linkUrl'), initialValue: row.linkUrl ?? '' },
+        { name: 'position', label: t('position'), kind: 'select', options: positionOptions, initialValue: row.position },
+        { name: 'onlineAt', label: t('onlineAt'), initialValue: row.onlineAt ?? '' },
+        { name: 'offlineAt', label: t('offlineAt'), initialValue: row.offlineAt ?? '' },
+      ],
+      onSubmit: async (v) => {
+        await adminApi.patchBanner(row.id, {
+          title: v.title.trim(),
+          imageUrl: v.imageUrl.trim(),
+          linkUrl: v.linkUrl.trim() || null,
+          position: v.position === 'category' ? 'category' : 'home',
+          onlineAt: v.onlineAt.trim() || null,
+          offlineAt: v.offlineAt.trim() || null,
+        });
+        load();
+      },
+    });
   }
 
   return (
@@ -138,7 +212,7 @@ export default function ConfigPage() {
                   <TD>{row.labelEn}</TD>
                   <TD>{row.labelZh}</TD>
                   <TD>{row.sortOrder}</TD>
-                  <TD><Switch checked={row.enabled} onCheckedChange={() => toggleCategory(row)} aria-label={`Toggle ${row.key}`} /></TD>
+                  <TD><Switch checked={row.enabled} onCheckedChange={() => toggleCategory(row)} aria-label={`${t('toggle')} ${row.key}`} /></TD>
                   <TD className="text-right"><Button onClick={() => editCategory(row)} size="sm" variant="ghost">{t('edit')}</Button></TD>
                 </TR>
               ))}
@@ -167,7 +241,7 @@ export default function ConfigPage() {
                   <TD>{row.labelEn}</TD>
                   <TD>{row.isDefaultCity ? <StatusBadge status="approved" /> : '—'}</TD>
                   <TD>{row.sortOrder}</TD>
-                  <TD><Switch checked={row.enabled} onCheckedChange={() => toggleRegion(row)} aria-label={`Toggle ${row.city}`} /></TD>
+                  <TD><Switch checked={row.enabled} onCheckedChange={() => toggleRegion(row)} aria-label={`${t('toggle')} ${row.city}`} /></TD>
                   <TD className="text-right"><Button onClick={() => editRegion(row)} size="sm" variant="ghost">{t('edit')}</Button></TD>
                 </TR>
               ))}
@@ -195,7 +269,7 @@ export default function ConfigPage() {
                   <TD className="max-w-[180px] truncate text-xs text-muted-foreground">{row.linkUrl ?? '—'}</TD>
                   <TD className="text-xs text-muted-foreground">{row.onlineAt ? new Date(row.onlineAt).toLocaleString() : '—'}</TD>
                   <TD className="text-xs text-muted-foreground">{row.offlineAt ? new Date(row.offlineAt).toLocaleString() : '—'}</TD>
-                  <TD><Switch checked={row.enabled} onCheckedChange={() => toggleBanner(row)} aria-label={`Toggle ${row.title}`} /></TD>
+                  <TD><Switch checked={row.enabled} onCheckedChange={() => toggleBanner(row)} aria-label={`${t('toggle')} ${row.title}`} /></TD>
                   <TD className="text-right"><Button onClick={() => editBanner(row)} size="sm" variant="ghost">{t('edit')}</Button></TD>
                 </TR>
               ))}
@@ -203,6 +277,7 @@ export default function ConfigPage() {
           </DataTable>
         </TabsContent>
       </Tabs>
+      <FormModal config={modal} onClose={() => setModal(null)} />
     </AppShell>
   );
 }

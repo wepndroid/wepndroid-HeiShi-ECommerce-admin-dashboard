@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -7,6 +7,7 @@ import {
   FileSearch,
   Flag,
   ShoppingBag,
+  Gavel,
   Settings,
   Bell,
   Search,
@@ -37,7 +38,6 @@ type NavGroup = {
     labelKey: string;
     icon: typeof LayoutDashboard;
     count?: number;
-    tone?: 'warning' | 'danger' | 'info';
   }[];
 };
 
@@ -64,7 +64,6 @@ function SidebarContent({
           labelKey: 'verifications',
           icon: ShieldCheck,
           count: counts.pendingVerification || undefined,
-          tone: 'warning',
         },
         {
           to: '/content',
@@ -72,19 +71,19 @@ function SidebarContent({
           icon: FileSearch,
           count: counts.pendingReview || undefined,
         },
-        { to: '/reports', labelKey: 'reports', icon: Flag, count: counts.reports || undefined, tone: 'danger' },
+        { to: '/reports', labelKey: 'reports', icon: Flag, count: counts.reports || undefined },
       ],
     },
     {
       labelKey: 'navOperations',
       items: [
         { to: '/users', labelKey: 'users', icon: Users },
+        { to: '/orders', labelKey: 'orders', icon: ShoppingBag },
         {
-          to: '/orders',
-          labelKey: 'orders',
-          icon: ShoppingBag,
+          to: '/disputes',
+          labelKey: 'disputes',
+          icon: Gavel,
           count: counts.disputes || undefined,
-          tone: 'info',
         },
       ],
     },
@@ -124,14 +123,6 @@ function SidebarContent({
                     ? pathname === '/'
                     : pathname === item.to || pathname.startsWith(`${item.to}/`);
                 const Icon = item.icon;
-                const toneClass =
-                  item.tone === 'danger'
-                    ? 'bg-destructive/90 text-white'
-                    : item.tone === 'warning'
-                      ? 'bg-warning/90 text-warning-foreground'
-                      : item.tone === 'info'
-                        ? 'bg-info/80 text-info-foreground'
-                        : 'bg-white/10 text-sidebar-foreground/80';
                 return (
                   <li key={item.to}>
                     <Link
@@ -159,12 +150,7 @@ function SidebarContent({
                       />
                       <span className="flex-1 truncate">{t(item.labelKey as never)}</span>
                       {item.count ? (
-                        <span
-                          className={cn(
-                            'inline-flex h-4 min-w-[1.1rem] items-center justify-center rounded px-1 text-[10px] font-semibold tabular-nums',
-                            toneClass,
-                          )}
-                        >
+                        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums bg-[#7ad80b] text-black">
                           {item.count}
                         </span>
                       ) : null}
@@ -192,6 +178,8 @@ export function AppShell({
   const { t, locale, setLocale } = useI18n();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [counts, setCounts] = useState({
     pendingReview: 0,
     pendingVerification: 0,
@@ -213,10 +201,37 @@ export function AppShell({
       .catch(() => undefined);
   }, [title]);
 
+  // ⌘K / Ctrl+K focuses the global search, matching the visible hint.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  function onSearch(e: FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    if (q) navigate(`/users?q=${encodeURIComponent(q)}`);
+  }
+
   function logout() {
     clearToken();
     navigate('/login');
   }
+
+  const pendingTotal =
+    counts.pendingReview + counts.pendingVerification + counts.reports + counts.disputes;
+  const queueLinks = [
+    { to: '/verifications', label: t('verifications'), count: counts.pendingVerification },
+    { to: '/content', label: t('contentReview'), count: counts.pendingReview },
+    { to: '/reports', label: t('reports'), count: counts.reports },
+    { to: '/disputes', label: t('disputes'), count: counts.disputes },
+  ];
 
   return (
     <div className="flex min-h-dvh bg-background">
@@ -258,10 +273,13 @@ export function AppShell({
             ) : null}
           </div>
 
-          <div className="relative ml-auto hidden w-full max-w-sm items-center md:flex">
+          <form onSubmit={onSearch} className="relative ml-auto hidden w-full max-w-sm items-center md:flex">
             <Search className="pointer-events-none absolute left-3 h-3.5 w-3.5 text-muted-foreground" />
             <Input
+              ref={searchRef}
               type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder={t('searchPlaceholder')}
               className="h-8 pl-8 pr-14 text-sm"
               aria-label={t('searchPlaceholder')}
@@ -269,12 +287,38 @@ export function AppShell({
             <kbd className="pointer-events-none absolute right-2 inline-flex h-5 select-none items-center gap-0.5 rounded border border-border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
               <Command className="h-3 w-3" />K
             </kbd>
-          </div>
+          </form>
 
-          <Button variant="ghost" size="icon" aria-label={t('notifications')} className="relative ml-auto h-8 w-8 md:ml-0">
-            <Bell className="h-4 w-4" />
-            <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-destructive ring-2 ring-background" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label={t('notifications')} className="relative ml-auto h-8 w-8 md:ml-0">
+                <Bell className="h-4 w-4" />
+                {pendingTotal > 0 ? (
+                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#7ad80b] ring-2 ring-background" />
+                ) : null}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>{t('queueHealth')}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {pendingTotal === 0 ? (
+                <div className="px-2 py-4 text-center text-xs text-muted-foreground">{t('allCaughtUp')}</div>
+              ) : (
+                queueLinks
+                  .filter((q) => q.count > 0)
+                  .map((q) => (
+                    <DropdownMenuItem key={q.to} asChild>
+                      <Link to={q.to} className="flex items-center justify-between">
+                        <span>{q.label}</span>
+                        <span className="ml-2 rounded bg-muted px-1.5 text-xs font-semibold tabular-nums">
+                          {q.count}
+                        </span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

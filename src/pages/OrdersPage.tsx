@@ -10,6 +10,9 @@ import { StatusBadge } from '@/components/admin/StatusBadge';
 import { EmptyState } from '@/components/admin/EmptyState';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
+
+const isDispute = (o: OrderRow) => o.status === 'inDispute' || o.status === 'refundInProgress';
 
 export default function OrdersPage() {
   const { t } = useI18n();
@@ -24,8 +27,8 @@ export default function OrdersPage() {
 
   const totals = useMemo(() => {
     const revenue = items.reduce((s, o) => s + (o.amount ?? 0), 0);
-    const disputed = items.filter((o) => o.status === 'inDispute' || o.status === 'refundInProgress').length;
-    const paid = items.filter((o) => o.paymentStatus === 'paid').length;
+    const disputed = items.filter(isDispute).length;
+    const paid = items.filter((o) => o.paymentStatus === 'paid' || o.paymentStatus === 'succeeded').length;
     return { revenue, disputed, paid };
   }, [items]);
 
@@ -39,7 +42,10 @@ export default function OrdersPage() {
           { label: t('paidOrders'), value: totals.paid },
           { label: t('disputedLabel'), value: totals.disputed },
         ].map((c) => (
-          <Card key={c.label} className="p-4">
+          <Card
+            key={c.label}
+            className="border-[#7ad80b] p-4 transition-all hover:bg-[#7ad80b]/20 hover:backdrop-blur-sm hover:shadow-lg hover:shadow-[#7ad80b]/40"
+          >
             <p className="text-xs uppercase text-muted-foreground">{c.label}</p>
             <p className="mt-1 text-2xl font-semibold">{c.value}</p>
           </Card>
@@ -66,8 +72,16 @@ export default function OrdersPage() {
               <TR key={row.id}>
                 <TD className="font-mono text-xs text-muted-foreground">#{row.id}</TD>
                 <TD className="max-w-[240px] truncate font-medium">{row.title ?? '—'}</TD>
-                <TD>{row.buyer ?? '—'}</TD>
-                <TD>{row.seller ?? '—'}</TD>
+                <TD>
+                  {row.buyer ? (
+                    <span className="flex items-center gap-2"><Avatar src={row.buyer.avatarUrl} name={row.buyer.nickname} size={24} />{row.buyer.nickname}</span>
+                  ) : '—'}
+                </TD>
+                <TD>
+                  {row.seller ? (
+                    <span className="flex items-center gap-2"><Avatar src={row.seller.avatarUrl} name={row.seller.nickname} size={24} />{row.seller.nickname}</span>
+                  ) : '—'}
+                </TD>
                 <TD className="font-semibold">${row.amount}</TD>
                 <TD><StatusBadge status={row.status} /></TD>
                 <TD>{row.paymentStatus ? <StatusBadge status={row.paymentStatus} /> : '—'}</TD>

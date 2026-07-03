@@ -1,6 +1,15 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Search, Users as UsersIcon } from 'lucide-react';
+import {
+  Search,
+  Users as UsersIcon,
+  MoreHorizontal,
+  Eye,
+  Ban,
+  ShieldCheck,
+  FileText,
+  ShoppingBag,
+} from 'lucide-react';
 import { adminApi, type UserRow } from '@/api/client';
 import { useI18n } from '@/i18n';
 import { AppShell } from '@/components/admin/AppShell';
@@ -9,8 +18,18 @@ import { DataTable, TBody, TD, TH, THead, TR } from '@/components/admin/DataTabl
 import { TablePagination } from '@/components/admin/TablePagination';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { EmptyState } from '@/components/admin/EmptyState';
+import { FormModal, type ModalConfig } from '@/components/admin/FormModal';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
+import { ImageLightbox } from '@/components/ui/image-lightbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -21,13 +40,23 @@ import {
 
 export default function UsersPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [items, setItems] = useState<UserRow[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [error, setError] = useState('');
-  const [q, setQ] = useState('');
+  const [searchParams] = useSearchParams();
+  const [q, setQ] = useState(searchParams.get('q') ?? '');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+
+  // Sync the search box when arriving from the global header search (?q=...).
+  useEffect(() => {
+    setQ(searchParams.get('q') ?? '');
+    setPage(1);
+  }, [searchParams]);
 
   const load = useCallback(() => {
     adminApi
@@ -56,6 +85,32 @@ export default function UsersPage() {
       );
     });
   }, [items, q, statusFilter]);
+
+  function ban(u: UserRow) {
+    setModal({
+      title: `${t('ban')} · ${u.nickname}`,
+      destructive: true,
+      submitLabel: t('ban'),
+      fields: [{ name: 'reason', label: t('banReason'), kind: 'textarea', required: true }],
+      onSubmit: async (v) => {
+        await adminApi.banUser(u.id, v.reason.trim());
+        load();
+      },
+    });
+  }
+
+  function unban(u: UserRow) {
+    setModal({
+      title: `${t('unban')} · ${u.nickname}`,
+      description: t('confirmUnban'),
+      submitLabel: t('unban'),
+      fields: [],
+      onSubmit: async () => {
+        await adminApi.unbanUser(u.id);
+        load();
+      },
+    });
+  }
 
   return (
     <AppShell title={t('users')} description={t('usersDesc')}>
@@ -108,7 +163,23 @@ export default function UsersPage() {
             {filtered.map((u) => (
               <TR key={u.id}>
                 <TD className="font-mono text-xs text-muted-foreground">{u.id.slice(0, 8)}…</TD>
-                <TD className="font-medium">{u.nickname}</TD>
+                <TD className="font-medium">
+                  <div className="flex items-center gap-2">
+                    {u.avatarUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewSrc(u.avatarUrl)}
+                        aria-label={t('viewImage')}
+                        className="rounded-full transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Avatar src={u.avatarUrl} name={u.nickname} size={28} />
+                      </button>
+                    ) : (
+                      <Avatar src={u.avatarUrl} name={u.nickname} size={28} />
+                    )}
+                    <span>{u.nickname}</span>
+                  </div>
+                </TD>
                 <TD>{u.phone}</TD>
                 <TD>{u.city ?? '—'}</TD>
                 <TD>
@@ -117,15 +188,55 @@ export default function UsersPage() {
                 <TD><StatusBadge status={u.accountStatus} /></TD>
                 <TD className="text-muted-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleString() : '—'}</TD>
                 <TD className="text-right">
-                  <Button asChild size="sm" variant="ghost">
-                    <Link to={`/users/${u.id}`}>{t('view')}</Link>
-                  </Button>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button asChild size="sm" variant="ghost">
+                      <Link to={`/users/${u.id}`}>{t('view')}</Link>
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={t('actions')}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onSelect={() => navigate(`/users/${u.id}`)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          {t('view')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => navigate(`/users/${u.id}#listings`)}>
+                          <FileText className="mr-2 h-4 w-4" />
+                          {t('viewListings')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => navigate(`/users/${u.id}#orders`)}>
+                          <ShoppingBag className="mr-2 h-4 w-4" />
+                          {t('viewOrders')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {u.accountStatus === 'banned' ? (
+                          <DropdownMenuItem onSelect={() => unban(u)}>
+                            <ShieldCheck className="mr-2 h-4 w-4" />
+                            {t('unban')}
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            onSelect={() => ban(u)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Ban className="mr-2 h-4 w-4" />
+                            {t('ban')}
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </TD>
               </TR>
             ))}
           </TBody>
         </DataTable>
       )}
+      <FormModal config={modal} onClose={() => setModal(null)} />
+      <ImageLightbox src={previewSrc} onClose={() => setPreviewSrc(null)} />
     </AppShell>
   );
 }

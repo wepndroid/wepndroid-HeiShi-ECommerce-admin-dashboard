@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Ban, ShieldCheck } from 'lucide-react';
 import { adminApi, type ContentItem, type OrderRow, type UserDetail } from '@/api/client';
@@ -9,7 +9,10 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Avatar } from '@/components/ui/avatar';
+import { ImageLightbox } from '@/components/ui/image-lightbox';
 import { StatusBadge } from '@/components/admin/StatusBadge';
+import { FormModal, type ModalConfig } from '@/components/admin/FormModal';
 
 export default function UserDetailPage() {
   const { t } = useI18n();
@@ -19,6 +22,9 @@ export default function UserDetailPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const location = useLocation();
 
   const load = useCallback(() => {
     Promise.all([adminApi.user(userId!), adminApi.userListings(userId!), adminApi.userOrders(userId!)])
@@ -33,11 +39,22 @@ export default function UserDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function ban() {
-    const reason = window.prompt(t('rejectReason'));
-    if (!reason?.trim()) return;
-    await adminApi.banUser(userId!, reason.trim());
-    load();
+  // Deep-link to the listings / orders sections from the Users list actions menu.
+  useEffect(() => {
+    if (!user) return;
+    const hash = location.hash.replace('#', '');
+    if (!hash) return;
+    document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [user, location.hash]);
+
+  function ban() {
+    setModal({
+      title: t('ban'),
+      destructive: true,
+      submitLabel: t('ban'),
+      fields: [{ name: 'reason', label: t('banReason'), kind: 'textarea', required: true }],
+      onSubmit: async (v) => { await adminApi.banUser(userId!, v.reason.trim()); load(); },
+    });
   }
   async function unban() { await adminApi.unbanUser(userId!); load(); }
   async function saveNotes() { await adminApi.setUserNotes(userId!, notes); load(); }
@@ -52,6 +69,20 @@ export default function UserDetailPage() {
       {!user ? <p className="text-muted-foreground">{t('loading')}</p> : (
         <>
           <PageHeader
+            leading={
+              user.avatarUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setPreviewSrc(user.avatarUrl)}
+                  aria-label={t('viewImage')}
+                  className="rounded-full transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Avatar src={user.avatarUrl} name={user.nickname} size={48} />
+                </button>
+              ) : (
+                <Avatar src={user.avatarUrl} name={user.nickname} size={48} />
+              )
+            }
             title={user.nickname}
             description={`${user.phone} · ${user.city ?? '—'}`}
             actions={
@@ -84,7 +115,7 @@ export default function UserDetailPage() {
           </Card>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Card className="p-5">
+            <Card id="listings" className="scroll-mt-20 p-5">
               <h3 className="mb-3 text-sm font-semibold">{t('listings')}</h3>
               <ul className="divide-y divide-border">
                 {listings.length === 0 ? <li className="py-2 text-sm text-muted-foreground">{t('noItems')}</li> : listings.map((l) => (
@@ -95,7 +126,7 @@ export default function UserDetailPage() {
                 ))}
               </ul>
             </Card>
-            <Card className="p-5">
+            <Card id="orders" className="scroll-mt-20 p-5">
               <h3 className="mb-3 text-sm font-semibold">{t('orderHistory')}</h3>
               <ul className="divide-y divide-border">
                 {orders.length === 0 ? <li className="py-2 text-sm text-muted-foreground">{t('noItems')}</li> : orders.map((o) => (
@@ -109,6 +140,8 @@ export default function UserDetailPage() {
           </div>
         </>
       )}
+      <FormModal config={modal} onClose={() => setModal(null)} />
+      <ImageLightbox src={previewSrc} onClose={() => setPreviewSrc(null)} />
     </AppShell>
   );
 }

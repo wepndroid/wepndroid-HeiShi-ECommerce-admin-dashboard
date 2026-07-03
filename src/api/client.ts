@@ -1,3 +1,31 @@
+import { mockAdminApi } from './mock/mockAdminApi';
+import type {
+  AccountStatus,
+  BundleItem,
+  ListingStatus,
+  ListingType,
+  OrderStatus,
+  Party,
+  PaymentStatus,
+  ReportStatus,
+  ReviewStatus,
+  VerificationStatus,
+} from './domain';
+
+export type {
+  AccountStatus,
+  BundleItem,
+  BundleItemStatus,
+  ListingStatus,
+  ListingType,
+  OrderStatus,
+  Party,
+  PaymentStatus,
+  ReportStatus,
+  ReviewStatus,
+  VerificationStatus,
+} from './domain';
+
 const TOKEN_KEY = 'heymarket_admin_token';
 
 export function getToken(): string | null {
@@ -49,8 +77,9 @@ export type UserRow = {
   nickname: string;
   phone: string;
   city: string | null;
+  avatarUrl: string | null;
   identityVerified: boolean;
-  accountStatus: string;
+  accountStatus: AccountStatus;
   createdAt: string | null;
 };
 
@@ -64,13 +93,12 @@ export type UserDetail = UserRow & {
 
 export type ContentItem = {
   id: number;
-  type: string;
+  type: ListingType;
   title: string;
   price: number;
-  reviewStatus: string;
-  status?: string;
-  publisher: string | null;
-  publisherId?: string;
+  reviewStatus: ReviewStatus;
+  status?: ListingStatus;
+  publisher: Party | null;
   city: string;
   area?: string;
   categoryKey?: string;
@@ -84,8 +112,33 @@ export type ContentDetail = ContentItem & {
   description: string;
   images: string[];
   reviewNote: string | null;
-  publisherPhone: string | null;
   publisherCity: string | null;
+  // Location & trade options
+  locationLabel: string | null;
+  currency: string;
+  negotiable: boolean;
+  escrowSupported: boolean;
+  meetInPublic: boolean;
+  pickupMethods: string[];
+  // Type-specific attributes
+  conditionKey: string | null; // second-hand condition
+  serviceIcon: string | null; // service visual type
+  merchantPost: boolean; // job posted by a business
+  // Seller trust
+  sellerTrades: number;
+  sellerRating: number; // positive rating rate, 0–100
+  sellerVerified: boolean;
+  // Engagement
+  viewCount: number;
+  favoriteCount: number;
+  updatedAt: string | null;
+  // Bundle-specific — nested meta mirrors the mobile app's BundleMetaDto.
+  bundleMeta: {
+    allowSeparateSale: boolean;
+    pickupWindow: string | null;
+    pickupDeadline: string | null;
+    items: BundleItem[];
+  } | null;
 };
 
 export type VerificationRow = {
@@ -93,7 +146,8 @@ export type VerificationRow = {
   userId: string;
   nickname: string | null;
   phone: string | null;
-  status: string;
+  avatarUrl?: string | null;
+  status: VerificationStatus;
   legalName: string;
   createdAt: string | null;
 };
@@ -114,9 +168,8 @@ export type ReportRow = {
   targetType: string;
   targetId: string;
   reason: string;
-  status: string;
-  reporter: string;
-  reporterId: string;
+  status: ReportStatus;
+  reporter: Party;
   createdAt: string | null;
 };
 
@@ -127,24 +180,22 @@ export type ReportDetail = {
   reason: string;
   details: string | null;
   evidenceUrls: string[];
-  status: string;
+  status: ReportStatus;
   handlerNote: string | null;
-  reporter: { id: string; nickname: string | null; phone: string | null };
-  reportedUser: { id: string; nickname: string; phone: string } | null;
+  reporter: Party;
+  reportedUser: Party | null;
   targetSummary: Record<string, unknown> | null;
   createdAt: string | null;
 };
 
 export type OrderRow = {
   id: number;
-  buyer: string | null;
-  buyerId?: string;
-  seller: string | null;
-  sellerId?: string;
+  buyer: Party | null;
+  seller: Party | null;
   title: string | null;
   amount: number;
-  status: string;
-  paymentStatus: string | null;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus | null;
   pspTransactionId: string | null;
   createdAt: string | null;
 };
@@ -160,6 +211,17 @@ export type OrderDetail = OrderRow & {
   adminNotes: string | null;
   disputeStatus: string | null;
   disputeReason: string | null;
+};
+
+// Identical shape to the mobile app's ChatMessageDto (Frontend/src/api/types.ts) so the
+// buyer↔seller conversation is retrieved and rendered exactly as it exists on the mobile side.
+export type ChatMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  text: string;
+  sentAt: string;
+  ackRead?: boolean;
 };
 
 export type CategoryRow = {
@@ -196,13 +258,17 @@ export type BannerRow = {
   enabled: boolean;
 };
 
-export const adminApi = {
+export type AdminMe = { id: string; nickname: string; phone: string; isAdmin: boolean };
+
+const realAdminApi = {
   login(phone: string, password: string) {
     return request<{ accessToken: string }>('/v1/admin/login', {
       method: 'POST',
       body: JSON.stringify({ phone, password }),
     });
   },
+  /** Verifies the current token belongs to an admin; the route is guarded by require_admin. */
+  me: () => request<AdminMe>('/v1/admin/me'),
   stats: () => request<DashboardStats>('/v1/admin/stats'),
   users: (page = 1) => request<Paginated<UserRow>>(`/v1/admin/users?page=${page}`),
   user: (id: string) => request<UserDetail>(`/v1/admin/users/${id}`),
@@ -264,6 +330,8 @@ export const adminApi = {
       method: 'POST',
       body: JSON.stringify({ action, note }),
     }),
+  setReportNote: (id: string, note: string) =>
+    request<{ ok: boolean }>(`/v1/admin/reports/${id}/notes`, { method: 'PATCH', body: JSON.stringify({ note }) }),
   chatTranscript: (id: string) =>
     request<{ messages: { senderId: string; text: string; sentAt: string | null }[] }>(
       `/v1/admin/reports/${id}/chat-transcript`,
@@ -271,6 +339,7 @@ export const adminApi = {
 
   orders: () => request<{ items: OrderRow[] }>('/v1/admin/orders'),
   order: (id: number) => request<OrderDetail>(`/v1/admin/orders/${id}`),
+  orderChat: (id: number) => request<{ messages: ChatMessage[] }>(`/v1/admin/orders/${id}/chat`),
   pausePayout: (id: number) => request<{ ok: boolean }>(`/v1/admin/orders/${id}/pause-payout`, { method: 'POST' }),
   markAbnormal: (id: number) =>
     request<{ ok: boolean }>(`/v1/admin/orders/${id}/mark-abnormal`, { method: 'POST' }),
@@ -362,3 +431,12 @@ export const adminApi = {
       }),
     }),
 };
+
+/** Full admin API surface — the mock must implement every method. */
+export type AdminApi = typeof realAdminApi;
+
+// Frontend + mock phase: default to the mock API (no backend). Set VITE_ADMIN_USE_MOCK=false
+// to talk to the real /v1/admin backend once it is available.
+const USE_MOCK = (import.meta.env.VITE_ADMIN_USE_MOCK as string | undefined) !== 'false';
+
+export const adminApi: AdminApi = USE_MOCK ? mockAdminApi : realAdminApi;

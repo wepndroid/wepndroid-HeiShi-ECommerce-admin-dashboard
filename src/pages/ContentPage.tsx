@@ -10,6 +10,7 @@ import { TablePagination } from '@/components/admin/TablePagination';
 import { StatusBadge } from '@/components/admin/StatusBadge';
 import { EmptyState } from '@/components/admin/EmptyState';
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ const TYPE_FILTERS = [
   { value: 'service', labelKey: 'filterTypeService' as const },
   { value: 'job', labelKey: 'filterTypeJob' as const },
   { value: 'rental', labelKey: 'filterTypeRental' as const },
+  { value: 'bundle', labelKey: 'filterTypeBundle' as const },
 ];
 
 export default function ContentPage() {
@@ -101,7 +103,11 @@ export default function ContentPage() {
                 <TD className="font-mono text-xs text-muted-foreground">#{item.id}</TD>
                 <TD className="max-w-[280px] truncate font-medium">{item.title}</TD>
                 <TD className="capitalize">{item.type}</TD>
-                <TD>{item.publisher ?? '—'}</TD>
+                <TD>
+                  {item.publisher ? (
+                    <span className="flex items-center gap-2"><Avatar src={item.publisher.avatarUrl} name={item.publisher.nickname} size={24} />{item.publisher.nickname}</span>
+                  ) : '—'}
+                </TD>
                 <TD>{item.city} / {item.area}</TD>
                 <TD>${item.price}</TD>
                 <TD><StatusBadge status={item.reviewStatus} /></TD>

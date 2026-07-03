@@ -54,7 +54,7 @@ export default function DashboardPage() {
     },
     {
       label: t('disputes'),
-      to: '/orders',
+      to: '/disputes',
       count: stats?.disputeOrderCount ?? 0,
     },
   ];

@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { getToken } from './api/client';
+import { useEffect, useState } from 'react';
+import { adminApi, clearToken, getToken } from './api/client';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ContentPage from './pages/ContentPage';
@@ -12,16 +14,74 @@ import ReportsPage from './pages/ReportsPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import OrdersPage from './pages/OrdersPage';
 import OrderDetailPage from './pages/OrderDetailPage';
+import DisputesPage from './pages/DisputesPage';
 import ConfigPage from './pages/ConfigPage';
 import type { ReactNode } from 'react';
 
+// Cached once per session so the admin check doesn't re-run (and flash a spinner) on every
+// route change. Reset when the token is cleared so a fresh login re-verifies.
+let adminVerified = false;
+
+/**
+ * Guards admin routes: a token must exist AND resolve to an admin via adminApi.me()
+ * (the backend route is require_admin-guarded; the mock enforces the same). A non-admin
+ * or stale token is cleared and bounced to /login, so non-admins cannot access the web.
+ */
 function RequireAuth({ children }: { children: ReactNode }) {
-  if (!getToken()) return <Navigate to="/login" replace />;
+  const [state, setState] = useState<'checking' | 'ok' | 'denied'>(() =>
+    !getToken() ? 'denied' : adminVerified ? 'ok' : 'checking',
+  );
+
+  useEffect(() => {
+    if (!getToken()) {
+      adminVerified = false;
+      setState('denied');
+      return;
+    }
+    if (adminVerified) return; // already verified this session — no re-check, no flash
+    let active = true;
+    adminApi
+      .me()
+      .then((me) => {
+        if (!active) return;
+        if (me?.isAdmin) {
+          adminVerified = true;
+          setState('ok');
+        } else {
+          clearToken();
+          adminVerified = false;
+          setState('denied');
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        clearToken();
+        adminVerified = false;
+        setState('denied');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (state === 'denied') return <Navigate to="/login" replace />;
+  if (state === 'checking') {
+    return (
+      <div className="grid min-h-dvh place-items-center bg-background" aria-busy="true">
+        <span
+          className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary"
+          role="status"
+          aria-label="Loading"
+        />
+      </div>
+    );
+  }
   return children;
 }
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
@@ -113,6 +173,14 @@ export default function App() {
           }
         />
         <Route
+          path="/disputes"
+          element={
+            <RequireAuth>
+              <DisputesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
           path="/config"
           element={
             <RequireAuth>
@@ -122,5 +190,6 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </ErrorBoundary>
   );
 }

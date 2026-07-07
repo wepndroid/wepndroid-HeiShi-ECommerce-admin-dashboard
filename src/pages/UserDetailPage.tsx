@@ -1,6 +1,6 @@
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Ban, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Ban, ShieldCheck, MicOff, Mic, Send, SendHorizontal, Flag, FlagOff } from 'lucide-react';
 import { adminApi, type ContentItem, type OrderRow, type UserDetail } from '@/api/client';
 import { useI18n } from '@/i18n';
 import { AppShell } from '@/components/admin/AppShell';
@@ -59,6 +59,38 @@ export default function UserDetailPage() {
   async function unban() { await adminApi.unbanUser(userId!); load(); }
   async function saveNotes() { await adminApi.setUserNotes(userId!, notes); load(); }
 
+  // Moderation: enabling mute/restrict/flag prompts for an optional reason via the shared modal.
+  function mute() {
+    setModal({
+      title: t('mute'),
+      submitLabel: t('mute'),
+      fields: [{ name: 'reason', label: t('reasonOptional'), kind: 'textarea' }],
+      onSubmit: async (v) => { await adminApi.muteUser(userId!, v.reason.trim() || undefined); load(); },
+    });
+  }
+  async function unmute() { await adminApi.unmuteUser(userId!); load(); }
+
+  function restrict() {
+    setModal({
+      title: t('restrictPublish'),
+      submitLabel: t('restrictPublish'),
+      fields: [{ name: 'reason', label: t('reasonOptional'), kind: 'textarea' }],
+      onSubmit: async (v) => { await adminApi.restrictPublish(userId!, v.reason.trim() || undefined); load(); },
+    });
+  }
+  async function unrestrict() { await adminApi.unrestrictPublish(userId!); load(); }
+
+  function flag() {
+    setModal({
+      title: t('flagAbnormal'),
+      destructive: true,
+      submitLabel: t('flagAbnormal'),
+      fields: [{ name: 'reason', label: t('reasonOptional'), kind: 'textarea' }],
+      onSubmit: async (v) => { await adminApi.flagUser(userId!, v.reason.trim() || undefined); load(); },
+    });
+  }
+  async function unflag() { await adminApi.unflagUser(userId!); load(); }
+
   return (
     <AppShell title={user?.nickname ?? t('loading')} description={t('userDetailDesc')}>
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
@@ -94,6 +126,26 @@ export default function UserDetailPage() {
             }
           />
 
+          {user.isMuted || user.publishRestricted || user.isFlagged ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {user.isMuted ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-warning-foreground ring-1 ring-inset ring-warning/30 whitespace-nowrap dark:text-warning">
+                  <MicOff className="h-3 w-3" />{t('muted')}
+                </span>
+              ) : null}
+              {user.publishRestricted ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-warning-foreground ring-1 ring-inset ring-warning/30 whitespace-nowrap dark:text-warning">
+                  <Send className="h-3 w-3" />{t('publishRestricted')}
+                </span>
+              ) : null}
+              {user.isFlagged ? (
+                <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-1.5 py-0.5 text-[11px] font-medium text-destructive ring-1 ring-inset ring-destructive/25 whitespace-nowrap">
+                  <Flag className="h-3 w-3" />{t('flagged')}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {[
               { label: t('accountStatus'), value: <StatusBadge status={user.accountStatus} /> },
@@ -107,6 +159,68 @@ export default function UserDetailPage() {
               </Card>
             ))}
           </div>
+
+          <Card className="mt-6 p-5">
+            <h3 className="mb-4 text-sm font-semibold">{t('moderationControls')}</h3>
+            <div className="divide-y divide-border">
+              <div className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{t('mute')}</span>
+                    {user.isMuted ? (
+                      <span className="inline-flex items-center rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-warning-foreground ring-1 ring-inset ring-warning/30 dark:text-warning">{t('muted')}</span>
+                    ) : null}
+                  </div>
+                  {user.isMuted && user.muteReason ? (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{t('reason')}: {user.muteReason}</p>
+                  ) : null}
+                </div>
+                {user.isMuted ? (
+                  <Button onClick={unmute} variant="outline" size="sm"><Mic className="h-4 w-4" />{t('unmute')}</Button>
+                ) : (
+                  <Button onClick={mute} variant="outline" size="sm"><MicOff className="h-4 w-4" />{t('mute')}</Button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{t('restrictPublish')}</span>
+                    {user.publishRestricted ? (
+                      <span className="inline-flex items-center rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-warning-foreground ring-1 ring-inset ring-warning/30 dark:text-warning">{t('publishRestricted')}</span>
+                    ) : null}
+                  </div>
+                  {user.publishRestricted && user.publishRestrictReason ? (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{t('reason')}: {user.publishRestrictReason}</p>
+                  ) : null}
+                </div>
+                {user.publishRestricted ? (
+                  <Button onClick={unrestrict} variant="outline" size="sm"><SendHorizontal className="h-4 w-4" />{t('unrestrictPublish')}</Button>
+                ) : (
+                  <Button onClick={restrict} variant="outline" size="sm"><Send className="h-4 w-4" />{t('restrictPublish')}</Button>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{t('flagAbnormal')}</span>
+                    {user.isFlagged ? (
+                      <span className="inline-flex items-center rounded-md bg-destructive/10 px-1.5 py-0.5 text-[11px] font-medium text-destructive ring-1 ring-inset ring-destructive/25">{t('flagged')}</span>
+                    ) : null}
+                  </div>
+                  {user.isFlagged && user.flagReason ? (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{t('reason')}: {user.flagReason}</p>
+                  ) : null}
+                </div>
+                {user.isFlagged ? (
+                  <Button onClick={unflag} variant="outline" size="sm"><FlagOff className="h-4 w-4" />{t('unflag')}</Button>
+                ) : (
+                  <Button onClick={flag} variant="destructive" size="sm"><Flag className="h-4 w-4" />{t('flagAbnormal')}</Button>
+                )}
+              </div>
+            </div>
+          </Card>
 
           <Card className="mt-6 p-5">
             <Label htmlFor="notes" className="text-sm font-semibold">{t('adminNotes')}</Label>

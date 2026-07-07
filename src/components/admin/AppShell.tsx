@@ -7,7 +7,6 @@ import {
   FileSearch,
   Flag,
   ShoppingBag,
-  Gavel,
   Settings,
   Bell,
   Search,
@@ -15,6 +14,11 @@ import {
   Menu,
   X,
   Command,
+  Package,
+  Star,
+  MessageSquareWarning,
+  Image as ImageIcon,
+  Layers,
 } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import { adminApi, clearToken } from '@/api/client';
@@ -51,54 +55,63 @@ function SidebarContent({
   const { t } = useI18n();
   const { pathname } = useLocation();
 
+  // Mirrors the client's 12-module MVP spec: Overview / Operations / Trust & safety / Platform.
   const navGroups: NavGroup[] = [
     {
       labelKey: 'navOverview',
       items: [{ to: '/', labelKey: 'dashboard', icon: LayoutDashboard }],
     },
     {
-      labelKey: 'navTrustSafety',
+      labelKey: 'navOperations',
       items: [
-        {
-          to: '/verifications',
-          labelKey: 'verifications',
-          icon: ShieldCheck,
-          count: counts.pendingVerification || undefined,
-        },
+        { to: '/users', labelKey: 'users', icon: Users },
+        { to: '/products', labelKey: 'products', icon: Package },
         {
           to: '/content',
           labelKey: 'contentReview',
           icon: FileSearch,
           count: counts.pendingReview || undefined,
         },
-        { to: '/reports', labelKey: 'reports', icon: Flag, count: counts.reports || undefined },
+        {
+          to: '/orders',
+          labelKey: 'orders',
+          icon: ShoppingBag,
+          count: counts.disputes || undefined,
+        },
+        { to: '/reviews', labelKey: 'reviewsNav', icon: Star },
       ],
     },
     {
-      labelKey: 'navOperations',
+      labelKey: 'navTrustSafety',
       items: [
-        { to: '/users', labelKey: 'users', icon: Users },
-        { to: '/orders', labelKey: 'orders', icon: ShoppingBag },
+        { to: '/reports', labelKey: 'reports', icon: Flag, count: counts.reports || undefined },
+        { to: '/chat-risk', labelKey: 'chatRisk', icon: MessageSquareWarning },
         {
-          to: '/disputes',
-          labelKey: 'disputes',
-          icon: Gavel,
-          count: counts.disputes || undefined,
+          to: '/verifications',
+          labelKey: 'verifications',
+          icon: ShieldCheck,
+          count: counts.pendingVerification || undefined,
         },
       ],
     },
     {
       labelKey: 'navPlatform',
-      items: [{ to: '/config', labelKey: 'config', icon: Settings }],
+      items: [
+        { to: '/config/categories', labelKey: 'categoriesNav', icon: Layers },
+        { to: '/config/banners', labelKey: 'bannersNav', icon: ImageIcon },
+        { to: '/config/system', labelKey: 'systemConfig', icon: Settings },
+      ],
     },
   ];
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
-        <span className="grid h-7 w-7 place-items-center rounded-md bg-white/10 text-[11px] font-bold tracking-tight text-white ring-1 ring-white/15">
-          HM
-        </span>
+        <img
+          src="/brand-logo.png"
+          alt="HeyMarket"
+          className="h-7 w-7 shrink-0 rounded-md object-cover ring-1 ring-white/15"
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-white">HeyMarket</p>
         </div>
@@ -230,7 +243,7 @@ export function AppShell({
     { to: '/verifications', label: t('verifications'), count: counts.pendingVerification },
     { to: '/content', label: t('contentReview'), count: counts.pendingReview },
     { to: '/reports', label: t('reports'), count: counts.reports },
-    { to: '/disputes', label: t('disputes'), count: counts.disputes },
+    { to: '/orders?filter=disputes', label: t('disputes'), count: counts.disputes },
   ];
 
   return (

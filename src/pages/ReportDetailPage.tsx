@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { adminApi, type ReportDetail } from '@/api/client';
+import { adminApi, type ContentDetail, type ReportDetail } from '@/api/client';
 import { useI18n } from '@/i18n';
 import { AppShell } from '@/components/admin/AppShell';
 import { PageHeader } from '@/components/admin/PageHeader';
@@ -17,6 +17,7 @@ export default function ReportDetailPage() {
   const { t } = useI18n();
   const { reportId } = useParams<{ reportId: string }>();
   const [detail, setDetail] = useState<ReportDetail | null>(null);
+  const [content, setContent] = useState<ContentDetail | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<ModalConfig | null>(null);
@@ -24,8 +25,16 @@ export default function ReportDetailPage() {
   const [savedNote, setSavedNote] = useState(false);
 
   const load = useCallback(() => {
-    adminApi.report(reportId!).then((d) => { setDetail(d); setNote(d.handlerNote ?? ''); })
-      .catch((err) => setError(err instanceof Error ? err.message : t('error')));
+    adminApi.report(reportId!).then((d) => {
+      setDetail(d);
+      setNote(d.handlerNote ?? '');
+      // Pull the full reported listing so moderators see what was reported, not just an id.
+      if ((d.targetType === 'listing' || d.targetType === 'service') && /^\d+$/.test(d.targetId)) {
+        adminApi.contentDetail(Number(d.targetId)).then(setContent).catch(() => setContent(null));
+      } else {
+        setContent(null);
+      }
+    }).catch((err) => setError(err instanceof Error ? err.message : t('error')));
   }, [reportId, t]);
   useEffect(() => { load(); }, [load]);
 
@@ -74,18 +83,76 @@ export default function ReportDetailPage() {
           />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-2 p-5">
-              {detail.details ? <p className="mb-4 text-sm text-foreground">{detail.details}</p> : null}
-              {detail.evidenceUrls.length > 0 && (
-                <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {detail.evidenceUrls.map((url) => (
-                    <a key={url} href={url} target="_blank" rel="noreferrer">
-                      <img src={url} alt={t('evidence')} className="aspect-square w-full rounded-lg border border-border object-cover" />
-                    </a>
-                  ))}
-                </div>
-              )}
-            </Card>
+            <div className="space-y-4 lg:col-span-2">
+              {detail.targetType === 'listing' || detail.targetType === 'service' ? (
+                <Card className="p-5">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold">{t('reportedContent')}</h3>
+                    {/^\d+$/.test(detail.targetId) ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={`/content/${detail.targetId}`}>{t('viewInContentReview')}</Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                  {content ? (
+                    <div className="space-y-4">
+                      {content.images.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                          {content.images.map((url) => (
+                            <a key={url} href={url} target="_blank" rel="noreferrer">
+                              <img src={url} alt={content.title} className="aspect-square w-full rounded-lg border border-border object-cover" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-start justify-between gap-3">
+                          <h4 className="text-base font-semibold text-foreground">{content.title}</h4>
+                          <StatusBadge status={content.reviewStatus} />
+                        </div>
+                        <p className="mt-1 text-lg font-semibold text-foreground">
+                          {content.currency?.toUpperCase()} {content.price}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {[content.city, content.area].filter(Boolean).join(' · ')}
+                        </p>
+                        {content.description ? (
+                          <p className="mt-3 whitespace-pre-line text-sm text-muted-foreground">{content.description}</p>
+                        ) : null}
+                      </div>
+                      {content.publisher ? (
+                        <div className="flex items-center gap-2 border-t border-border pt-3">
+                          <Avatar src={content.publisher.avatarUrl} name={content.publisher.nickname} size={28} />
+                          <span className="text-sm font-medium">{content.publisher.nickname}</span>
+                          {content.publisher.phone ? (
+                            <span className="text-xs text-muted-foreground">({content.publisher.phone})</span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{t('contentUnavailable')}</p>
+                  )}
+                </Card>
+              ) : null}
+
+              <Card className="p-5">
+                <h3 className="mb-2 text-sm font-semibold">{t('reportReason')}</h3>
+                <p className="text-sm font-medium text-foreground">{detail.reason}</p>
+                {detail.details ? (
+                  <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">{detail.details}</p>
+                ) : null}
+                {detail.evidenceUrls.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {detail.evidenceUrls.map((url) => (
+                      <a key={url} href={url} target="_blank" rel="noreferrer">
+                        <img src={url} alt={t('evidence')} className="aspect-square w-full rounded-lg border border-border object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
 
             <div className="space-y-4">
               <Card className="p-5">

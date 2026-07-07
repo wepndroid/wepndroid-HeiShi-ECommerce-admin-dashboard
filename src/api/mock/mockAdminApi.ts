@@ -7,10 +7,16 @@ import type {
   CategoryRow,
   ContentItem,
   DashboardStats,
+  FlaggedMessage,
+  KeywordRow,
   OrderRow,
   Paginated,
+  PlatformSettings,
+  ProductTagRow,
   RegionRow,
   ReportRow,
+  ReportReasonRow,
+  TopicRow,
   UserRow,
   VerificationRow,
 } from '../client';
@@ -52,9 +58,19 @@ function toUserRow(u: MockDb['users'][number]): UserRow {
   return { id, nickname, phone, city, avatarUrl, identityVerified, accountStatus, createdAt };
 }
 
-function toContentItem(c: MockDb['content'][number]): ContentItem {
+// 发布审核 risk-control: matched sensitive words (from active keywords) + high-risk flag
+// (keyword hit OR flagged seller) — mirrors the backend _listing_risk definition.
+function riskFor(db: MockDb, c: MockDb['content'][number]): { matchedKeywords: string[]; riskLevel: 'high' | 'normal' } {
+  const hay = `${c.title} ${c.description ?? ''}`.toLowerCase();
+  const matched = db.keywords.filter((k) => k.active && hay.includes(k.pattern.toLowerCase())).map((k) => k.pattern);
+  const sellerFlagged = !!(c.publisher && db.users.find((u) => u.id === c.publisher!.id)?.isFlagged);
+  return { matchedKeywords: matched, riskLevel: matched.length || sellerFlagged ? 'high' : 'normal' };
+}
+
+function toContentItem(c: MockDb['content'][number], db?: MockDb): ContentItem {
   const { id, type, title, price, reviewStatus, status, publisher, city, area, categoryKey, tagKey, isRecommended, isPinned, createdAt } = c;
-  return { id, type, title, price, reviewStatus, status, publisher, city, area, categoryKey, tagKey, isRecommended, isPinned, createdAt };
+  const risk = db ? riskFor(db, c) : { matchedKeywords: [] as string[], riskLevel: 'normal' as const };
+  return { id, type, title, price, reviewStatus, status, publisher, city, area, categoryKey, tagKey, isRecommended, isPinned, matchedKeywords: risk.matchedKeywords, riskLevel: risk.riskLevel, createdAt };
 }
 
 function toOrderRow(o: MockDb['orders'][number], db: MockDb): OrderRow {
@@ -108,17 +124,43 @@ export const mockAdminApi: AdminApi = {
   async stats(): Promise<DashboardStats> {
     const db = readDb();
     const todayPrefix = nowIso().slice(0, 10);
+    // 热门分类: rank active listings by category, resolve display labels from the config table.
+    const counts = new Map<string, number>();
+    db.content
+      .filter((c) => c.status === 'active')
+      .forEach((c) => {
+        const key = c.categoryKey ?? 'misc';
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      });
+    const popularCategories = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([key, count]) => {
+        const cat = db.categories.find((c) => c.key === key);
+        return { key, labelEn: cat?.labelEn ?? key, labelZh: cat?.labelZh ?? key, count };
+      });
+    // 热门搜索词: mock has no search log, so surface a representative static ranking.
+    const popularSearchTerms = [
+      { term: 'iphone', count: 42 },
+      { term: 'desk', count: 31 },
+      { term: 'moving', count: 27 },
+      { term: 'camera', count: 19 },
+      { term: 'graduation', count: 12 },
+    ];
     return {
       totalUsers: db.users.length,
       newUsersToday: db.users.filter((u) => (u.createdAt ?? '').slice(0, 10) === todayPrefix).length,
       totalListings: db.content.length,
+      activeListingCount: db.content.filter((c) => c.status === 'active').length,
       pendingReviewCount: db.content.filter((c) => c.reviewStatus === 'pendingReview').length,
       reportCount: db.reports.filter((r) => r.status === 'pending').length,
       orderCount: db.orders.length,
+      completedTradeCount: db.orders.filter((o) => o.status === 'completed').length,
       disputeOrderCount: db.orders.filter((o) => o.status === 'inDispute' || o.status === 'refundInProgress').length,
       dau: 42,
-      promotionClicks: 128,
       pendingVerificationCount: db.verifications.filter((v) => v.status === 'pending').length,
+      popularCategories,
+      popularSearchTerms,
     };
   },
 
@@ -130,7 +172,8 @@ export const mockAdminApi: AdminApi = {
     return u ?? notFound('User');
   },
   async userListings(id: string) {
-    return { items: readDb().content.filter((c) => c.publisher?.id === id).map(toContentItem) };
+    const db = readDb();
+    return { items: db.content.filter((c) => c.publisher?.id === id).map((c) => toContentItem(c, db)) };
   },
   async userOrders(id: string) {
     const db = readDb();
@@ -159,20 +202,75 @@ export const mockAdminApi: AdminApi = {
       return OK;
     });
   },
+  async muteUser(id: string, reason = '') {
+    return mutate((db) => {
+      const u = db.users.find((x) => x.id === id) ?? notFound('User');
+      u.isMuted = true;
+      u.muteReason = reason || null;
+      return OK;
+    });
+  },
+  async unmuteUser(id: string) {
+    return mutate((db) => {
+      const u = db.users.find((x) => x.id === id) ?? notFound('User');
+      u.isMuted = false;
+      u.muteReason = null;
+      return OK;
+    });
+  },
+  async restrictPublish(id: string, reason = '') {
+    return mutate((db) => {
+      const u = db.users.find((x) => x.id === id) ?? notFound('User');
+      u.publishRestricted = true;
+      u.publishRestrictReason = reason || null;
+      return OK;
+    });
+  },
+  async unrestrictPublish(id: string) {
+    return mutate((db) => {
+      const u = db.users.find((x) => x.id === id) ?? notFound('User');
+      u.publishRestricted = false;
+      u.publishRestrictReason = null;
+      return OK;
+    });
+  },
+  async flagUser(id: string, reason = '') {
+    return mutate((db) => {
+      const u = db.users.find((x) => x.id === id) ?? notFound('User');
+      u.isFlagged = true;
+      u.flagReason = reason || null;
+      return OK;
+    });
+  },
+  async unflagUser(id: string) {
+    return mutate((db) => {
+      const u = db.users.find((x) => x.id === id) ?? notFound('User');
+      u.isFlagged = false;
+      u.flagReason = null;
+      return OK;
+    });
+  },
 
-  async content(reviewStatus?: string, contentType?: string, page = 1) {
-    const items = readDb().content
+  async content(reviewStatus?: string, contentType?: string, page = 1, riskLevel?: string, search?: string) {
+    const db = readDb();
+    const term = search?.trim().toLowerCase();
+    let items = db.content
       .filter((c) => (reviewStatus ? c.reviewStatus === reviewStatus : true))
       .filter((c) => (contentType ? c.type === contentType : true))
-      .map(toContentItem);
+      .filter((c) => (term ? c.title.toLowerCase().includes(term) : true))
+      .map((c) => toContentItem(c, db));
+    if (riskLevel === 'high') items = items.filter((i) => i.riskLevel === 'high');
     return paginate(items, page);
   },
   async contentDetail(id: number) {
     const db = readDb();
     const c = db.content.find((x) => x.id === id);
     if (!c) return notFound('Listing');
+    const risk = riskFor(db, c);
     return {
       ...c,
+      matchedKeywords: risk.matchedKeywords,
+      riskLevel: risk.riskLevel,
       publisher: c.publisher ? { ...c.publisher, avatarUrl: avatarOf(db, c.publisher.id) } : null,
     };
   },
@@ -231,6 +329,91 @@ export const mockAdminApi: AdminApi = {
       if (patch.title !== undefined) c.title = patch.title;
       if (patch.description !== undefined) c.description = patch.description;
       if (patch.categoryKey !== undefined) c.categoryKey = patch.categoryKey;
+      return OK;
+    });
+  },
+  async setContentTags(id: number, tagKey: string) {
+    return mutate((db) => {
+      const c = db.content.find((x) => x.id === id) ?? notFound('Listing');
+      c.tagKey = tagKey;
+      return OK;
+    });
+  },
+  async contentReports(id: number) {
+    const db = readDb();
+    const items = db.reports
+      .filter((r) => (r.targetType === 'listing' || r.targetType === 'service') && r.targetId === String(id))
+      .map((r) => ({
+        id: r.id,
+        reason: r.reason,
+        details: r.details,
+        status: r.status,
+        reporter: { ...r.reporter, avatarUrl: avatarOf(db, r.reporter.id) },
+        createdAt: r.createdAt,
+      }));
+    return { items };
+  },
+  async deleteContent(id: number) {
+    return mutate((db) => {
+      const hasOrders = db.orders.some((o) => o.listingId === id);
+      if (hasOrders) {
+        const c = db.content.find((x) => x.id === id) ?? notFound('Listing');
+        c.reviewStatus = 'removed';
+        c.status = 'inactive';
+        return { ok: true as const, deleted: false };
+      }
+      db.content = db.content.filter((x) => x.id !== id);
+      return { ok: true as const, deleted: true };
+    });
+  },
+
+  async reviews(filter: 'all' | 'visible' | 'hidden' | 'removed' = 'all') {
+    const db = readDb();
+    const items = db.reviews
+      .filter((r) =>
+        filter === 'visible' ? !r.isHidden && !r.isRemoved
+        : filter === 'hidden' ? r.isHidden
+        : filter === 'removed' ? r.isRemoved
+        : true,
+      )
+      .map((r) => ({
+        id: r.id, orderId: r.orderId, rating: r.rating, comment: r.comment,
+        isHidden: r.isHidden, isRemoved: r.isRemoved,
+        reviewer: r.reviewer ? { ...r.reviewer, avatarUrl: avatarOf(db, r.reviewer.id) } : null,
+        listingId: r.listingId, listingTitle: r.listingTitle, createdAt: r.createdAt,
+      }));
+    return { items };
+  },
+  async review(id: string) {
+    const db = readDb();
+    const r = db.reviews.find((x) => x.id === id);
+    if (!r) return notFound('Review');
+    return {
+      ...r,
+      reviewer: r.reviewer ? { ...r.reviewer, avatarUrl: avatarOf(db, r.reviewer.id) } : null,
+      reviewee: r.reviewee ? { ...r.reviewee, avatarUrl: avatarOf(db, r.reviewee.id) } : null,
+    };
+  },
+  async hideReview(id: string, note = '') {
+    return mutate((db) => {
+      const r = db.reviews.find((x) => x.id === id) ?? notFound('Review');
+      r.isHidden = true;
+      if (note) r.adminNote = note;
+      return OK;
+    });
+  },
+  async unhideReview(id: string) {
+    return mutate((db) => {
+      const r = db.reviews.find((x) => x.id === id) ?? notFound('Review');
+      r.isHidden = false;
+      return OK;
+    });
+  },
+  async deleteReview(id: string, note = '') {
+    return mutate((db) => {
+      const r = db.reviews.find((x) => x.id === id) ?? notFound('Review');
+      r.isRemoved = true;
+      if (note) r.adminNote = note;
       return OK;
     });
   },
@@ -402,6 +585,8 @@ export const mockAdminApi: AdminApi = {
       if (patch.labelZh !== undefined) c.labelZh = patch.labelZh;
       if (patch.sortOrder !== undefined) c.sortOrder = patch.sortOrder;
       if (patch.enabled !== undefined) c.enabled = patch.enabled;
+      if (patch.icon !== undefined) c.icon = patch.icon;
+      if (patch.showOnHome !== undefined) c.showOnHome = patch.showOnHome;
       return OK;
     });
   },
@@ -452,5 +637,167 @@ export const mockAdminApi: AdminApi = {
       if (patch.enabled !== undefined) b.enabled = patch.enabled;
       return OK;
     });
+  },
+
+  async keywords() {
+    return { items: readDb().keywords.map((k) => ({ ...k })) };
+  },
+  async createKeyword(body: Omit<KeywordRow, 'id'>) {
+    return mutate((db) => {
+      const id = db.keywords.reduce((max, k) => Math.max(max, k.id), 0) + 1;
+      db.keywords.push({ ...body, id });
+      return { id };
+    });
+  },
+  async patchKeyword(id: number, patch: Partial<Omit<KeywordRow, 'id'>>) {
+    return mutate((db) => {
+      const k = db.keywords.find((x) => x.id === id) ?? notFound('Keyword');
+      if (patch.pattern !== undefined) k.pattern = patch.pattern;
+      if (patch.locale !== undefined) k.locale = patch.locale;
+      if (patch.active !== undefined) k.active = patch.active;
+      return OK;
+    });
+  },
+  async deleteKeyword(id: number) {
+    return mutate((db) => {
+      db.keywords = db.keywords.filter((x) => x.id !== id);
+      return OK;
+    });
+  },
+
+  async reportReasons() {
+    return { items: readDb().reportReasons.map((r) => ({ ...r })) };
+  },
+  async createReportReason(body: Omit<ReportReasonRow, 'id'>) {
+    return mutate((db) => {
+      const id = db.reportReasons.reduce((max, r) => Math.max(max, r.id), 0) + 1;
+      db.reportReasons.push({ ...body, id });
+      return { id };
+    });
+  },
+  async patchReportReason(id: number, patch: Partial<Omit<ReportReasonRow, 'id' | 'key'>>) {
+    return mutate((db) => {
+      const r = db.reportReasons.find((x) => x.id === id) ?? notFound('Reason');
+      if (patch.labelEn !== undefined) r.labelEn = patch.labelEn;
+      if (patch.labelZh !== undefined) r.labelZh = patch.labelZh;
+      if (patch.sortOrder !== undefined) r.sortOrder = patch.sortOrder;
+      if (patch.active !== undefined) r.active = patch.active;
+      return OK;
+    });
+  },
+  async deleteReportReason(id: number) {
+    return mutate((db) => {
+      db.reportReasons = db.reportReasons.filter((x) => x.id !== id);
+      return OK;
+    });
+  },
+
+  async productTags() {
+    return { items: readDb().productTags.map((t) => ({ ...t })) };
+  },
+  async createProductTag(body: Omit<ProductTagRow, 'id'>) {
+    return mutate((db) => {
+      const id = db.productTags.reduce((max, t) => Math.max(max, t.id), 0) + 1;
+      db.productTags.push({ ...body, id });
+      return { id };
+    });
+  },
+  async patchProductTag(id: number, patch: Partial<Omit<ProductTagRow, 'id' | 'key'>>) {
+    return mutate((db) => {
+      const t = db.productTags.find((x) => x.id === id) ?? notFound('Tag');
+      if (patch.labelEn !== undefined) t.labelEn = patch.labelEn;
+      if (patch.labelZh !== undefined) t.labelZh = patch.labelZh;
+      if (patch.sortOrder !== undefined) t.sortOrder = patch.sortOrder;
+      if (patch.active !== undefined) t.active = patch.active;
+      return OK;
+    });
+  },
+  async deleteProductTag(id: number) {
+    return mutate((db) => {
+      db.productTags = db.productTags.filter((x) => x.id !== id);
+      return OK;
+    });
+  },
+
+  async settings() {
+    return { values: { ...readDb().settings } };
+  },
+  async patchSettings(values: PlatformSettings) {
+    return mutate((db) => {
+      db.settings = { ...db.settings, ...values };
+      return OK;
+    });
+  },
+
+  async topics() {
+    return { items: readDb().topics.map((t) => ({ ...t })) };
+  },
+  async createTopic(body: Omit<TopicRow, 'id'>) {
+    return mutate((db) => {
+      const id = db.topics.reduce((max, t) => Math.max(max, t.id), 0) + 1;
+      db.topics.push({ ...body, id });
+      return { id };
+    });
+  },
+  async patchTopic(id: number, patch: Partial<Omit<TopicRow, 'id'>>) {
+    return mutate((db) => {
+      const t = db.topics.find((x) => x.id === id) ?? notFound('Topic');
+      Object.assign(t, patch);
+      return OK;
+    });
+  },
+  async deleteTopic(id: number) {
+    return mutate((db) => {
+      db.topics = db.topics.filter((x) => x.id !== id);
+      return OK;
+    });
+  },
+
+  async authStatus(page = 1) {
+    const db = readDb();
+    const items = db.users.map((u) => {
+      const first = u.nickname.trim().toLowerCase().split(' ')[0];
+      return {
+        id: u.id,
+        nickname: u.nickname,
+        avatarUrl: u.avatarUrl,
+        phone: u.phone,
+        phoneVerified: !!u.phone,
+        // Deterministic demo emails: verified users have a confirmed campus email.
+        email: `${first}@student.edu.au`,
+        emailVerified: u.identityVerified,
+        identityVerified: u.identityVerified,
+        businessVerified: u.businessVerified,
+      };
+    });
+    return paginate(items, page);
+  },
+
+  async chatFlagged() {
+    const db = readDb();
+    const active = db.keywords.filter((k) => k.active);
+    const items: FlaggedMessage[] = [];
+    const scan = (convId: string, msgs: { senderId: string; text: string; sentAt: string | null }[], idPrefix: string) => {
+      msgs.forEach((m, i) => {
+        const matched = active.filter((k) => m.text.toLowerCase().includes(k.pattern.toLowerCase())).map((k) => k.pattern);
+        if (!matched.length) return;
+        const u = db.users.find((x) => x.id === m.senderId);
+        items.push({
+          id: `${idPrefix}-${i}`,
+          conversationId: convId,
+          senderId: m.senderId,
+          sender: u ? { id: u.id, nickname: u.nickname, avatarUrl: u.avatarUrl, phone: u.phone } : null,
+          senderMuted: !!u?.isMuted,
+          text: m.text,
+          matched,
+          sentAt: m.sentAt,
+        });
+      });
+    };
+    Object.entries(db.transcripts).forEach(([k, msgs]) => scan(k, msgs, `t-${k}`));
+    Object.entries(db.orderChats).forEach(([k, msgs]) =>
+      scan(k, msgs.map((m) => ({ senderId: m.senderId, text: m.text, sentAt: m.sentAt })), `o-${k}`),
+    );
+    return { items };
   },
 };

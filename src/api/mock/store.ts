@@ -7,17 +7,23 @@ import type {
   CategoryRow,
   ChatMessage,
   ContentDetail,
+  KeywordRow,
   OrderDetail,
   Party,
+  PlatformSettings,
+  ProductTagRow,
   RegionRow,
   ReportDetail,
+  ReportReasonRow,
+  ReviewDetail,
+  TopicRow,
   UserDetail,
   VerificationDetail,
 } from '../client';
 
 const DB_KEY = 'heymarket_admin_mock_db';
 // Bump when the seed shape changes so persisted localStorage reseeds with new fields.
-const DB_VERSION = 6;
+const DB_VERSION = 9;
 
 export type TranscriptMsg = { senderId: string; text: string; sentAt: string | null };
 
@@ -28,9 +34,15 @@ export interface MockDb {
   verifications: VerificationDetail[];
   reports: ReportDetail[];
   orders: OrderDetail[];
+  reviews: ReviewDetail[];
   categories: CategoryRow[];
   regions: RegionRow[];
   banners: BannerRow[];
+  topics: TopicRow[];
+  keywords: KeywordRow[];
+  reportReasons: ReportReasonRow[];
+  productTags: ProductTagRow[];
+  settings: PlatformSettings;
   transcripts: Record<string, TranscriptMsg[]>;
   // Buyer↔seller conversations keyed by order id — same ChatMessage shape as the mobile app.
   orderChats: Record<string, ChatMessage[]>;
@@ -76,7 +88,17 @@ function seed(): MockDb {
     { id: 'u6', nickname: 'Frank', phone: '0400000006', city: 'Melbourne', identityVerified: false, accountStatus: 'normal', createdAt: today, businessVerified: false, banReason: null, adminNotes: null, listingCount: 1, orderCount: 0 },
     { id: 'u7', nickname: 'Grace', phone: '0400000007', city: 'Adelaide', identityVerified: true, accountStatus: 'normal', createdAt: today, businessVerified: false, banReason: null, adminNotes: null, listingCount: 0, orderCount: 1 },
     { id: 'u8', nickname: 'HeyMarket User', phone: '0400000000', city: 'Melbourne', identityVerified: false, accountStatus: 'normal', createdAt: daysAgo(5), businessVerified: false, banReason: null, adminNotes: null, listingCount: 0, orderCount: 4 },
-  ] as Omit<UserDetail, 'avatarUrl'>[]).map((u) => ({ ...u, avatarUrl: avatarPhoto(u.nickname) }));
+  ] as Omit<UserDetail, 'avatarUrl' | 'isMuted' | 'muteReason' | 'publishRestricted' | 'publishRestrictReason' | 'isFlagged' | 'flagReason'>[]).map((u) => ({
+    ...u,
+    avatarUrl: avatarPhoto(u.nickname),
+    // Demo moderation state: Dan (banned) is also flagged; Ben is muted for off-platform pitching.
+    isMuted: u.id === 'u2',
+    muteReason: u.id === 'u2' ? 'Repeatedly pushed off-platform payment in chat' : null,
+    publishRestricted: u.id === 'u4',
+    publishRestrictReason: u.id === 'u4' ? 'Prohibited-item listings under review' : null,
+    isFlagged: u.id === 'u4',
+    flagReason: u.id === 'u4' ? 'Abnormal account — multiple reports' : null,
+  }));
 
   // Enriches a compact seed row into a full ContentDetail — seller trust is derived from the
   // publishing user, and type-appropriate defaults fill trade options so every post is complete.
@@ -177,15 +199,61 @@ function seed(): MockDb {
   ];
 
   const categories: CategoryRow[] = [
-    { id: 1, type: 'product', key: 'digital', labelEn: 'Digital', labelZh: '数码', sortOrder: 1, enabled: true },
-    { id: 2, type: 'product', key: 'home', labelEn: 'Home', labelZh: '家居', sortOrder: 2, enabled: true },
-    { id: 3, type: 'product', key: 'fashion', labelEn: 'Fashion', labelZh: '服饰', sortOrder: 3, enabled: true },
-    { id: 4, type: 'service', key: 'moving', labelEn: 'Moving', labelZh: '搬家', sortOrder: 1, enabled: true },
-    { id: 5, type: 'service', key: 'cleaning', labelEn: 'Cleaning', labelZh: '清洁', sortOrder: 2, enabled: true },
-    { id: 6, type: 'job', key: 'hospitality', labelEn: 'Hospitality', labelZh: '餐饮', sortOrder: 1, enabled: true },
-    { id: 7, type: 'rental', key: 'room', labelEn: 'Room', labelZh: '房间', sortOrder: 1, enabled: true },
-    { id: 8, type: 'product', key: 'beauty', labelEn: 'Beauty', labelZh: '美妆', sortOrder: 4, enabled: false },
+    { id: 1, type: 'product', key: 'digital', labelEn: 'Digital', labelZh: '数码', sortOrder: 1, enabled: true, icon: 'smartphone', showOnHome: true },
+    { id: 2, type: 'product', key: 'home', labelEn: 'Home', labelZh: '家居', sortOrder: 2, enabled: true, icon: 'sofa', showOnHome: true },
+    { id: 3, type: 'product', key: 'fashion', labelEn: 'Fashion', labelZh: '服饰', sortOrder: 3, enabled: true, icon: 'shirt', showOnHome: true },
+    { id: 4, type: 'service', key: 'moving', labelEn: 'Moving', labelZh: '搬家', sortOrder: 1, enabled: true, icon: 'truck', showOnHome: true },
+    { id: 5, type: 'service', key: 'cleaning', labelEn: 'Cleaning', labelZh: '清洁', sortOrder: 2, enabled: true, icon: 'sparkles', showOnHome: false },
+    { id: 6, type: 'job', key: 'hospitality', labelEn: 'Hospitality', labelZh: '餐饮', sortOrder: 1, enabled: true, icon: 'utensils', showOnHome: true },
+    { id: 7, type: 'rental', key: 'room', labelEn: 'Room', labelZh: '房间', sortOrder: 1, enabled: true, icon: 'bed', showOnHome: true },
+    { id: 8, type: 'product', key: 'beauty', labelEn: 'Beauty', labelZh: '美妆', sortOrder: 4, enabled: false, icon: 'palette', showOnHome: false },
   ];
+
+  const reviews: ReviewDetail[] = [
+    { id: 'rv1', orderId: 2, rating: 5, comment: 'Great desk, exactly as described. Smooth pickup.', isHidden: false, isRemoved: false, reviewer: party('u3'), listingId: 2, listingTitle: 'IKEA study desk', createdAt: daysAgo(18), adminNote: null, reviewee: party('u1'), listing: content.find((c) => c.id === 2) ?? null, qualityRating: 5, communicationRating: 5, expertiseRating: null, professionalismRating: null, hireAgainRating: null },
+    { id: 'rv2', orderId: 3, rating: 1, comment: 'Never showed up and then went silent. Total waste of my Saturday!!!', isHidden: false, isRemoved: false, reviewer: party('u8'), listingId: 3, listingTitle: 'Two-person moving help', createdAt: daysAgo(4), adminNote: null, reviewee: party('u5'), listing: content.find((c) => c.id === 3) ?? null, qualityRating: 1, communicationRating: 1, expertiseRating: 2, professionalismRating: 1, hireAgainRating: 1 },
+    { id: 'rv3', orderId: 6, rating: 2, comment: 'Buy elsewhere, contact me on wechat abc123 for cheaper deals', isHidden: true, isRemoved: false, reviewer: party('u8'), listingId: 7, listingTitle: 'End-of-lease cleaning', createdAt: daysAgo(1), adminNote: 'Hidden: solicitation / off-platform contact.', reviewee: party('u5'), listing: content.find((c) => c.id === 7) ?? null, qualityRating: 2, communicationRating: 2, expertiseRating: null, professionalismRating: null, hireAgainRating: null },
+  ];
+
+  const topics: TopicRow[] = [
+    { id: 1, title: 'Graduation clearance zone', titleZh: '毕业二手清仓专区', subtitle: 'Everything students need before they fly home', coverImageUrl: img('topic-grad'), tagKey: 'graduation', linkUrl: '/topic/graduation', onlineAt: daysAgo(6), offlineAt: null, sortOrder: 0, enabled: true },
+    { id: 2, title: 'New arrivals', titleZh: '新上架专区', subtitle: 'Fresh listings this week', coverImageUrl: img('topic-new'), tagKey: 'new', linkUrl: '/topic/new', onlineAt: daysAgo(2), offlineAt: null, sortOrder: 1, enabled: true },
+    { id: 3, title: 'Winter warmers', titleZh: '冬季专场', subtitle: 'Heaters, coats & more', coverImageUrl: img('topic-winter'), tagKey: null, linkUrl: null, onlineAt: null, offlineAt: null, sortOrder: 2, enabled: false },
+  ];
+
+  const keywords: KeywordRow[] = [
+    { id: 1, pattern: 'replica', locale: 'all', active: true },
+    { id: 2, pattern: '代购', locale: 'zh', active: true },
+    { id: 3, pattern: 'bank transfer', locale: 'en', active: true },
+    { id: 4, pattern: 'wechat', locale: 'all', active: true },
+    { id: 5, pattern: '刀', locale: 'zh', active: false },
+  ];
+
+  const reportReasons: ReportReasonRow[] = [
+    { id: 1, key: 'prohibited', labelEn: 'Prohibited item', labelZh: '违禁物品', sortOrder: 0, active: true },
+    { id: 2, key: 'counterfeit', labelEn: 'Counterfeit / fake', labelZh: '假冒伪劣', sortOrder: 1, active: true },
+    { id: 3, key: 'fraud', labelEn: 'Fraud / scam', labelZh: '欺诈骗局', sortOrder: 2, active: true },
+    { id: 4, key: 'offensive', labelEn: 'Offensive content', labelZh: '不当内容', sortOrder: 3, active: true },
+    { id: 5, key: 'spam', labelEn: 'Spam / advertising', labelZh: '垃圾广告', sortOrder: 4, active: true },
+    { id: 6, key: 'other', labelEn: 'Other', labelZh: '其他', sortOrder: 5, active: true },
+  ];
+
+  const productTags: ProductTagRow[] = [
+    { id: 1, key: 'hot', labelEn: 'Hot', labelZh: '热门', sortOrder: 0, active: true },
+    { id: 2, key: 'new', labelEn: 'New arrival', labelZh: '新上架', sortOrder: 1, active: true },
+    { id: 3, key: 'clearance', labelEn: 'Clearance', labelZh: '清仓', sortOrder: 2, active: true },
+    { id: 4, key: 'graduation', labelEn: 'Graduation sale', labelZh: '毕业清仓', sortOrder: 3, active: true },
+    { id: 5, key: 'negotiable', labelEn: 'Negotiable', labelZh: '可议价', sortOrder: 4, active: true },
+  ];
+
+  const settings: PlatformSettings = {
+    'home.module.banners': 'on',
+    'home.module.categories': 'on',
+    'home.module.recommended': 'on',
+    'home.module.graduationZone': 'on',
+    'legal.userAgreement': 'By using HeyMarket you agree to trade responsibly and follow all local laws.',
+    'legal.privacyPolicy': 'We collect only what is needed to run the marketplace and never sell your data.',
+  };
 
   const regions: RegionRow[] = [
     { id: 1, country: 'AU', state: 'VIC', city: 'Melbourne', area: null, labelEn: 'Melbourne', labelZh: '墨尔本', isDefaultCity: true, sortOrder: 1, enabled: true },
@@ -232,7 +300,20 @@ function seed(): MockDb {
     ],
   };
 
-  return { version: DB_VERSION, users, content, verifications, reports, orders, categories, regions, banners, transcripts, orderChats };
+  return { version: DB_VERSION, users, content, verifications, reports, orders, reviews, categories, regions, banners, topics, keywords, reportReasons, productTags, settings, transcripts, orderChats };
+}
+
+// Every top-level collection a healthy MockDb must have. A cached DB missing any of
+// these (e.g. persisted mid-HMR while a new collection was being added) is treated as
+// stale and reseeded, so mock methods never hit `undefined.map`.
+const REQUIRED_KEYS: (keyof MockDb)[] = [
+  'users', 'content', 'verifications', 'reports', 'orders', 'reviews',
+  'categories', 'regions', 'banners', 'topics', 'keywords', 'reportReasons',
+  'productTags', 'settings', 'transcripts', 'orderChats',
+];
+
+function isHealthy(db: MockDb | null): db is MockDb {
+  return !!db && db.version === DB_VERSION && REQUIRED_KEYS.every((k) => db[k] != null);
 }
 
 export function readDb(): MockDb {
@@ -240,7 +321,7 @@ export function readDb(): MockDb {
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as MockDb;
-      if (parsed && parsed.version === DB_VERSION) return parsed;
+      if (isHealthy(parsed)) return parsed;
     } catch {
       // fall through to reseed
     }

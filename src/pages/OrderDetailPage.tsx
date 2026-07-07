@@ -1,8 +1,9 @@
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
-import { adminApi, type ContentDetail, type OrderDetail } from '@/api/client';
+import { ArrowLeft, ExternalLink, Check, CheckCheck, ArrowLeftRight } from 'lucide-react';
+import { adminApi, type ChatMessage, type ContentDetail, type OrderDetail } from '@/api/client';
 import { useI18n } from '@/i18n';
+import { cn } from '@/lib/utils';
 import { AppShell } from '@/components/admin/AppShell';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { Card } from '@/components/ui/card';
@@ -19,6 +20,7 @@ export default function OrderDetailPage() {
   const id = Number(orderId!);
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [listing, setListing] = useState<ContentDetail | null>(null);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -32,6 +34,13 @@ export default function OrderDetailPage() {
       // (images, description, condition, trade options, bundle items) — same as the mobile
       // order detail, which opens the product page. Degrade gracefully if it was removed.
       adminApi.contentDetail(o.listingId).then(setListing).catch(() => setListing(null));
+      // For disputed orders, retrieve the buyer↔seller conversation exactly as stored on
+      // the mobile side so the moderator can adjudicate inline (folded in from DisputesPage).
+      if (o.status === 'inDispute' || o.status === 'refundInProgress') {
+        adminApi.orderChat(id).then((res) => setChat(res.messages)).catch(() => setChat([]));
+      } else {
+        setChat([]);
+      }
     })
       .catch((err) => setError(err instanceof Error ? err.message : t('error')));
   }, [id, t]);
@@ -221,13 +230,97 @@ export default function OrderDetailPage() {
                 <div className="grid gap-2">
                   <Button onClick={() => act(() => adminApi.pausePayout(id))} disabled={busy} variant="outline">{t('pausePayout')}</Button>
                   <Button onClick={() => act(() => adminApi.markAbnormal(id))} disabled={busy} variant="outline">{t('markAbnormal')}</Button>
-                  {(detail.status === 'inDispute' || detail.status === 'refundInProgress') && (
-                    <Button asChild variant="default" disabled={busy}>
-                      <Link to="/disputes">{t('resolve')}</Link>
-                    </Button>
-                  )}
                 </div>
               </Card>
+
+              {(detail.status === 'inDispute' || detail.status === 'refundInProgress') ? (
+                <Card className="space-y-5 p-5">
+                  <h3 className="text-sm font-semibold">{t('resolve')}</h3>
+
+                  {detail.disputeReason ? (
+                    <div className="rounded-lg border border-warning/40 bg-warning/10 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-warning-foreground dark:text-warning">{t('disputeReason')}</p>
+                      <p className="mt-1 text-sm">{detail.disputeReason}</p>
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold">{t('chatTranscript')}</h4>
+                    <div className="overflow-hidden rounded-lg border border-border">
+                      {/* Fixed identity header: the two parties sit at the ends (buyer left,
+                          seller right) with a decorative connector between them, so the bubbles
+                          below no longer need to repeat each sender's avatar and name. */}
+                      <div className="flex items-center gap-3 border-b border-border bg-muted/40 px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Avatar src={detail.buyer?.avatarUrl} name={detail.buyer?.nickname} size={36} />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{detail.buyer?.nickname ?? t('buyer')}</p>
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('buyer')}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-1 items-center gap-2 text-muted-foreground">
+                          <span className="h-px flex-1 bg-border" />
+                          <span className="grid h-7 w-7 place-items-center rounded-full border border-border bg-background">
+                            <ArrowLeftRight className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="h-px flex-1 bg-border" />
+                        </div>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div className="min-w-0 text-right">
+                            <p className="truncate text-sm font-medium">{detail.seller?.nickname ?? t('seller')}</p>
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t('seller')}</p>
+                          </div>
+                          <Avatar src={detail.seller?.avatarUrl} name={detail.seller?.nickname} size={36} />
+                        </div>
+                      </div>
+                      {chat.length === 0 ? (
+                        <p className="bg-background p-4 text-center text-sm text-muted-foreground">{t('noItems')}</p>
+                      ) : (
+                        <div className="flex max-h-96 flex-col gap-2 overflow-auto bg-background p-3">
+                          {chat.map((m) => {
+                            // Buyer on the left, seller on the right — matching the header ends.
+                            const isSeller = m.senderId === detail.seller?.id;
+                            const time = m.sentAt
+                              ? new Date(m.sentAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                              : '';
+                            return (
+                              <div key={m.id} className={cn('flex', isSeller ? 'justify-end' : 'justify-start')}>
+                                <div
+                                  className={cn(
+                                    'max-w-[78%] rounded-lg px-3 py-2',
+                                    isSeller ? 'border border-primary/20 bg-primary/15' : 'bg-muted',
+                                  )}
+                                >
+                                  <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">{m.text}</p>
+                                  <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+                                    <span>{time}</span>
+                                    {m.ackRead ? (
+                                      <CheckCheck className="h-3 w-3 text-[#108EE9]" aria-label={t('read')} />
+                                    ) : (
+                                      <Check className="h-3 w-3" aria-label={t('sent')} />
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="dispute-note" className="text-sm font-semibold">{t('handlingNote')}</Label>
+                    <Textarea id="dispute-note" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="mt-2" />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <Button onClick={() => act(() => adminApi.resolveDispute(id, 'refund', notes))} disabled={busy}>{t('resolveRefund')}</Button>
+                    <Button onClick={() => act(() => adminApi.resolveDispute(id, 'complete', notes))} disabled={busy}>{t('resolveComplete')}</Button>
+                    <Button onClick={() => act(() => adminApi.resolveDispute(id, 'cancel', notes))} disabled={busy} variant="destructive">{t('resolveCancel')}</Button>
+                  </div>
+                </Card>
+              ) : null}
             </div>
           </div>
         </>

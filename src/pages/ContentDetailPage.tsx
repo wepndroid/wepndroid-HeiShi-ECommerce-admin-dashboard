@@ -1,7 +1,7 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Check, Pin, Star, Trash2, X } from 'lucide-react';
-import { adminApi, type ContentDetail } from '@/api/client';
+import { ArrowLeft, Check, Pin, Star, Tag, Trash2, X } from 'lucide-react';
+import { adminApi, type ContentDetail, type ContentReportRow, type ProductTagRow } from '@/api/client';
 import { useI18n } from '@/i18n';
 import { AppShell } from '@/components/admin/AppShell';
 import { PageHeader } from '@/components/admin/PageHeader';
@@ -14,6 +14,7 @@ import { FormModal, type ModalConfig } from '@/components/admin/FormModal';
 
 export default function ContentDetailPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { listingId } = useParams<{ listingId: string }>();
   const id = Number(listingId!);
   const [detail, setDetail] = useState<ContentDetail | null>(null);
@@ -21,6 +22,8 @@ export default function ContentDetailPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<ModalConfig | null>(null);
+  const [tags, setTags] = useState<ProductTagRow[]>([]);
+  const [reports, setReports] = useState<ContentReportRow[]>([]);
 
   const load = useCallback(() => {
     adminApi.contentDetail(id).then((d) => {
@@ -30,6 +33,11 @@ export default function ContentDetailPage() {
       .catch((err) => setError(err instanceof Error ? err.message : t('error')));
   }, [id, t]);
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    adminApi.productTags().then((res) => setTags(res.items)).catch(() => {});
+    adminApi.contentReports(id).then((res) => setReports(res.items)).catch(() => {});
+  }, [id]);
 
   async function act(fn: () => Promise<unknown>) {
     setBusy(true);
@@ -55,6 +63,37 @@ export default function ContentDetailPage() {
       onSubmit: async (v) => { await act(() => adminApi.editContent(id, { categoryKey: v.categoryKey.trim() })); },
     });
   }
+  function setTag() {
+    setModal({
+      title: t('setTag'),
+      submitLabel: t('save'),
+      fields: [
+        {
+          name: 'tagKey',
+          label: t('tags'),
+          kind: 'select',
+          initialValue: detail?.tagKey ?? '',
+          options: [
+            { value: '', label: t('noTag') },
+            ...tags.map((tg) => ({ value: tg.key, label: tg.labelEn })),
+          ],
+        },
+      ],
+      onSubmit: async (v) => { await act(() => adminApi.setContentTags(id, v.tagKey)); },
+    });
+  }
+  async function deleteListing() {
+    if (!window.confirm(t('confirmDeleteListing'))) return;
+    setBusy(true);
+    try {
+      await adminApi.deleteContent(id);
+      navigate('/content');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('error'));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <AppShell title={detail?.title ?? t('loading')} description={t('contentDetailDesc')}>
@@ -76,6 +115,25 @@ export default function ContentDetailPage() {
           />
 
           <div className="space-y-4">
+              {detail.matchedKeywords?.length || detail.riskLevel === 'high' ? (
+                <Card className="border-destructive/40 bg-destructive/5 p-5">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                    <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">{t('riskHigh')}</span>
+                    {t('highRiskManualReview')}
+                  </h3>
+                  {detail.matchedKeywords?.length ? (
+                    <div className="mt-3">
+                      <p className="mb-1.5 text-xs text-muted-foreground">{t('matchedKeywords')}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {detail.matchedKeywords.map((kw) => (
+                          <span key={kw} className="inline-flex items-center rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </Card>
+              ) : null}
+
               <Card className="p-5">
                 <h3 className="mb-3 text-sm font-semibold">{t('description')}</h3>
                 <p className="whitespace-pre-line text-sm text-muted-foreground">{detail.description}</p>
@@ -124,6 +182,36 @@ export default function ContentDetailPage() {
                   ) : null}
                 </Card>
               ) : null}
+
+              <Card className="p-5">
+                <h3 className="mb-3 text-sm font-semibold">{t('reportRecords')}</h3>
+                {reports.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('noReportsForListing')}</p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {reports.map((r) => (
+                      <li key={r.id} className="flex items-start justify-between gap-3 py-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{r.reason}</p>
+                          {r.details ? (
+                            <p className="mt-0.5 text-sm text-muted-foreground">{r.details}</p>
+                          ) : null}
+                          <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                            {r.reporter ? (
+                              <span className="flex items-center gap-1.5">
+                                <Avatar src={r.reporter.avatarUrl} name={r.reporter.nickname} size={20} />
+                                {r.reporter.nickname}
+                              </span>
+                            ) : null}
+                            <span>{r.createdAt ? new Date(r.createdAt).toLocaleString() : '—'}</span>
+                          </div>
+                        </div>
+                        <StatusBadge status={r.status} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <Card className="p-5">
@@ -210,6 +298,8 @@ export default function ContentDetailPage() {
                   <Button onClick={() => act(() => adminApi.setContentFlags(id, { pinned: !detail.isPinned }))} disabled={busy} variant="ghost"><Pin className="h-4 w-4" />{detail.isPinned ? t('unpin') : t('pin')}</Button>
                   <Button onClick={() => act(() => adminApi.setContentFlags(id, { recommended: !detail.isRecommended }))} disabled={busy} variant="ghost"><Star className="h-4 w-4" />{detail.isRecommended ? t('unrecommend') : t('recommend')}</Button>
                   <Button onClick={changeCategory} disabled={busy} variant="ghost" className="col-span-2">{t('changeCategory')}</Button>
+                  <Button onClick={setTag} disabled={busy} variant="ghost" className="col-span-2"><Tag className="h-4 w-4" />{t('setTag')}</Button>
+                  <Button onClick={deleteListing} disabled={busy} variant="destructive" className="col-span-2"><Trash2 className="h-4 w-4" />{t('deleteListing')}</Button>
                 </div>
               </Card>
             </div>

@@ -59,17 +59,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export type Paginated<T> = { items: T[]; total: number; page: number; pageSize: number };
 
+export type PopularCategory = { key: string; labelEn: string; labelZh: string; count: number };
+export type PopularSearchTerm = { term: string; count: number };
+
 export type DashboardStats = {
   totalUsers: number;
   newUsersToday: number;
   totalListings: number;
+  activeListingCount: number;
   pendingReviewCount: number;
   reportCount: number;
   orderCount: number;
+  completedTradeCount: number;
   disputeOrderCount: number;
   dau: number;
-  promotionClicks: number;
   pendingVerificationCount: number;
+  popularCategories: PopularCategory[];
+  popularSearchTerms: PopularSearchTerm[];
 };
 
 export type UserRow = {
@@ -87,9 +93,18 @@ export type UserDetail = UserRow & {
   businessVerified: boolean;
   banReason: string | null;
   adminNotes: string | null;
+  // Moderation controls (禁言 / 限制发布 / 异常用户标记).
+  isMuted: boolean;
+  muteReason: string | null;
+  publishRestricted: boolean;
+  publishRestrictReason: string | null;
+  isFlagged: boolean;
+  flagReason: string | null;
   listingCount: number;
   orderCount: number;
 };
+
+export type RiskLevel = 'high' | 'normal';
 
 export type ContentItem = {
   id: number;
@@ -105,6 +120,9 @@ export type ContentItem = {
   tagKey?: string;
   isRecommended?: boolean;
   isPinned?: boolean;
+  // Review risk-control (发布审核): sensitive words hit + high-risk flag.
+  matchedKeywords?: string[];
+  riskLevel?: RiskLevel;
   createdAt: string | null;
 };
 
@@ -232,6 +250,89 @@ export type CategoryRow = {
   labelZh: string;
   sortOrder: number;
   enabled: boolean;
+  icon?: string | null;
+  showOnHome?: boolean;
+};
+
+// 评价管理 — buyer/seller reviews for moderation.
+export type ReviewRow = {
+  id: string;
+  orderId: number;
+  rating: number;
+  comment: string | null;
+  isHidden: boolean;
+  isRemoved: boolean;
+  reviewer: Party | null;
+  listingId: number | null;
+  listingTitle: string | null;
+  createdAt: string | null;
+};
+
+export type ReviewDetail = ReviewRow & {
+  adminNote: string | null;
+  reviewee: Party | null;
+  listing: ContentItem | null;
+  qualityRating: number | null;
+  communicationRating: number | null;
+  expertiseRating: number | null;
+  professionalismRating: number | null;
+  hireAgainRating: number | null;
+};
+
+// 系统配置 — blocked keywords / report reasons / product tags / generic settings.
+export type KeywordRow = { id: number; pattern: string; locale: string; active: boolean };
+export type ReportReasonRow = { id: number; key: string; labelEn: string; labelZh: string; sortOrder: number; active: boolean };
+export type ProductTagRow = { id: number; key: string; labelEn: string; labelZh: string; sortOrder: number; active: boolean };
+export type PlatformSettings = Record<string, string>;
+
+// A report record as shown inline on a listing's moderation page (查看举报记录).
+export type ContentReportRow = {
+  id: string;
+  reason: string;
+  details: string | null;
+  status: ReportStatus;
+  reporter: Party | null;
+  createdAt: string | null;
+};
+
+// 专题 (topic zone) — curated feature area, distinct from banners.
+export type TopicRow = {
+  id: number;
+  title: string;
+  titleZh: string | null;
+  subtitle: string | null;
+  coverImageUrl: string;
+  tagKey: string | null;
+  linkUrl: string | null;
+  onlineAt: string | null;
+  offlineAt: string | null;
+  sortOrder: number;
+  enabled: boolean;
+};
+
+// 认证管理 — per-user phone/email/real-name auth status.
+export type AuthStatusRow = {
+  id: string;
+  nickname: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  phoneVerified: boolean;
+  email: string | null;
+  emailVerified: boolean;
+  identityVerified: boolean;
+  businessVerified: boolean;
+};
+
+// 聊天风控 — a chat message that hit a blocked keyword (敏感词命中).
+export type FlaggedMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  sender: Party | null;
+  senderMuted: boolean;
+  text: string;
+  matched: string[];
+  sentAt: string | null;
 };
 
 export type RegionRow = {
@@ -279,11 +380,23 @@ const realAdminApi = {
   unbanUser: (id: string) => request<{ ok: boolean }>(`/v1/admin/users/${id}/unban`, { method: 'POST' }),
   setUserNotes: (id: string, note: string) =>
     request<{ ok: boolean }>(`/v1/admin/users/${id}/notes`, { method: 'PATCH', body: JSON.stringify({ note }) }),
+  muteUser: (id: string, reason = '') =>
+    request<{ ok: boolean }>(`/v1/admin/users/${id}/mute`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  unmuteUser: (id: string) => request<{ ok: boolean }>(`/v1/admin/users/${id}/unmute`, { method: 'POST' }),
+  restrictPublish: (id: string, reason = '') =>
+    request<{ ok: boolean }>(`/v1/admin/users/${id}/restrict-publish`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  unrestrictPublish: (id: string) =>
+    request<{ ok: boolean }>(`/v1/admin/users/${id}/unrestrict-publish`, { method: 'POST' }),
+  flagUser: (id: string, reason = '') =>
+    request<{ ok: boolean }>(`/v1/admin/users/${id}/flag`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  unflagUser: (id: string) => request<{ ok: boolean }>(`/v1/admin/users/${id}/unflag`, { method: 'POST' }),
 
-  content: (reviewStatus?: string, contentType?: string, page = 1) => {
+  content: (reviewStatus?: string, contentType?: string, page = 1, riskLevel?: string, search?: string) => {
     const params = new URLSearchParams({ page: String(page) });
     if (reviewStatus) params.set('reviewStatus', reviewStatus);
     if (contentType) params.set('contentType', contentType);
+    if (riskLevel) params.set('riskLevel', riskLevel);
+    if (search && search.trim()) params.set('search', search.trim());
     return request<Paginated<ContentItem>>(`/v1/admin/content?${params}`);
   },
   contentDetail: (id: number) => request<ContentDetail>(`/v1/admin/content/${id}`),
@@ -312,6 +425,21 @@ const realAdminApi = {
     }),
   editContent: (id: number, patch: { title?: string; description?: string; categoryKey?: string }) =>
     request<{ ok: boolean }>(`/v1/admin/content/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  setContentTags: (id: number, tagKey: string) =>
+    request<{ ok: boolean }>(`/v1/admin/content/${id}/tags`, { method: 'PATCH', body: JSON.stringify({ tagKey }) }),
+  contentReports: (id: number) =>
+    request<{ items: ContentReportRow[] }>(`/v1/admin/content/${id}/reports`),
+  deleteContent: (id: number) =>
+    request<{ ok: boolean; deleted: boolean }>(`/v1/admin/content/${id}`, { method: 'DELETE' }),
+
+  reviews: (filter: 'all' | 'visible' | 'hidden' | 'removed' = 'all') =>
+    request<{ items: ReviewRow[] }>(`/v1/admin/reviews?filter=${filter}`),
+  review: (id: string) => request<ReviewDetail>(`/v1/admin/reviews/${id}`),
+  hideReview: (id: string, note = '') =>
+    request<{ ok: boolean }>(`/v1/admin/reviews/${id}/hide`, { method: 'POST', body: JSON.stringify({ note }) }),
+  unhideReview: (id: string) => request<{ ok: boolean }>(`/v1/admin/reviews/${id}/unhide`, { method: 'POST' }),
+  deleteReview: (id: string, note = '') =>
+    request<{ ok: boolean }>(`/v1/admin/reviews/${id}`, { method: 'DELETE', body: JSON.stringify({ note }) }),
 
   verifications: () => request<{ items: VerificationRow[] }>('/v1/admin/verifications'),
   verification: (id: string) => request<VerificationDetail>(`/v1/admin/verifications/${id}`),
@@ -362,6 +490,8 @@ const realAdminApi = {
         labelZh: body.labelZh,
         sortOrder: body.sortOrder,
         enabled: body.enabled,
+        icon: body.icon ?? null,
+        showOnHome: body.showOnHome ?? true,
       }),
     }),
   patchCategory: (id: number, patch: Partial<CategoryRow>) =>
@@ -372,6 +502,8 @@ const realAdminApi = {
         labelZh: patch.labelZh,
         sortOrder: patch.sortOrder,
         enabled: patch.enabled,
+        icon: patch.icon,
+        showOnHome: patch.showOnHome,
       }),
     }),
 
@@ -430,6 +562,53 @@ const realAdminApi = {
         enabled: patch.enabled,
       }),
     }),
+
+  // 禁发关键词
+  keywords: () => request<{ items: KeywordRow[] }>('/v1/admin/config/keywords'),
+  createKeyword: (body: Omit<KeywordRow, 'id'>) =>
+    request<{ id: number }>('/v1/admin/config/keywords', { method: 'POST', body: JSON.stringify(body) }),
+  patchKeyword: (id: number, patch: Partial<Omit<KeywordRow, 'id'>>) =>
+    request<{ ok: boolean }>(`/v1/admin/config/keywords/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteKeyword: (id: number) =>
+    request<{ ok: boolean }>(`/v1/admin/config/keywords/${id}`, { method: 'DELETE' }),
+
+  // 举报原因配置
+  reportReasons: () => request<{ items: ReportReasonRow[] }>('/v1/admin/config/report-reasons'),
+  createReportReason: (body: Omit<ReportReasonRow, 'id'>) =>
+    request<{ id: number }>('/v1/admin/config/report-reasons', { method: 'POST', body: JSON.stringify(body) }),
+  patchReportReason: (id: number, patch: Partial<Omit<ReportReasonRow, 'id' | 'key'>>) =>
+    request<{ ok: boolean }>(`/v1/admin/config/report-reasons/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteReportReason: (id: number) =>
+    request<{ ok: boolean }>(`/v1/admin/config/report-reasons/${id}`, { method: 'DELETE' }),
+
+  // 商品标签配置
+  productTags: () => request<{ items: ProductTagRow[] }>('/v1/admin/config/tags'),
+  createProductTag: (body: Omit<ProductTagRow, 'id'>) =>
+    request<{ id: number }>('/v1/admin/config/tags', { method: 'POST', body: JSON.stringify(body) }),
+  patchProductTag: (id: number, patch: Partial<Omit<ProductTagRow, 'id' | 'key'>>) =>
+    request<{ ok: boolean }>(`/v1/admin/config/tags/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteProductTag: (id: number) =>
+    request<{ ok: boolean }>(`/v1/admin/config/tags/${id}`, { method: 'DELETE' }),
+
+  // 首页开关 / 用户协议 / 隐私政策 (generic key→value settings)
+  settings: () => request<{ values: PlatformSettings }>('/v1/admin/config/settings'),
+  patchSettings: (values: PlatformSettings) =>
+    request<{ ok: boolean }>('/v1/admin/config/settings', { method: 'PATCH', body: JSON.stringify({ values }) }),
+
+  // 专题 (topic zones)
+  topics: () => request<{ items: TopicRow[] }>('/v1/admin/config/topics'),
+  createTopic: (body: Omit<TopicRow, 'id'>) =>
+    request<{ id: number }>('/v1/admin/config/topics', { method: 'POST', body: JSON.stringify(body) }),
+  patchTopic: (id: number, patch: Partial<Omit<TopicRow, 'id'>>) =>
+    request<{ ok: boolean }>(`/v1/admin/config/topics/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteTopic: (id: number) =>
+    request<{ ok: boolean }>(`/v1/admin/config/topics/${id}`, { method: 'DELETE' }),
+
+  // 认证管理 — phone/email auth status
+  authStatus: (page = 1) => request<Paginated<AuthStatusRow>>(`/v1/admin/auth-status?page=${page}`),
+
+  // 聊天风控 — sensitive-word hits across chats
+  chatFlagged: () => request<{ items: FlaggedMessage[] }>('/v1/admin/chat-risk/flagged'),
 };
 
 /** Full admin API surface — the mock must implement every method. */

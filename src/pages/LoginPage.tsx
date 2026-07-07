@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, type FormEvent } from 'react';
-import { Sparkles } from 'lucide-react';
 import { adminApi, setToken } from '@/api/client';
 import { useI18n } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -71,9 +70,11 @@ export default function LoginPage() {
 
         <Card className="border-border/70 bg-card/95 p-8 shadow-[var(--shadow-elevated)] backdrop-blur">
           <div className="mb-6 flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-primary to-info text-primary-foreground shadow-md">
-              <Sparkles className="h-5 w-5" />
-            </span>
+            <img
+              src="/brand-logo.png"
+              alt="HeyMarket"
+              className="h-11 w-11 shrink-0 rounded-xl object-cover shadow-md"
+            />
             <div>
               <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('appTitle')}</p>
               <h2 className="text-lg font-semibold text-foreground">{t('loginSignIn')}</h2>

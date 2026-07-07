@@ -9,6 +9,9 @@ import {
   ShieldCheck,
   FileText,
   ShoppingBag,
+  MicOff,
+  Send,
+  Flag,
 } from 'lucide-react';
 import { adminApi, type UserRow } from '@/api/client';
 import { useI18n } from '@/i18n';
@@ -112,6 +115,43 @@ export default function UsersPage() {
     });
   }
 
+  function mute(u: UserRow) {
+    setModal({
+      title: `${t('mute')} · ${u.nickname}`,
+      submitLabel: t('mute'),
+      fields: [{ name: 'reason', label: t('reasonOptional'), kind: 'textarea' }],
+      onSubmit: async (v) => {
+        await adminApi.muteUser(u.id, v.reason.trim() || undefined);
+        load();
+      },
+    });
+  }
+
+  function restrict(u: UserRow) {
+    setModal({
+      title: `${t('restrictPublish')} · ${u.nickname}`,
+      submitLabel: t('restrictPublish'),
+      fields: [{ name: 'reason', label: t('reasonOptional'), kind: 'textarea' }],
+      onSubmit: async (v) => {
+        await adminApi.restrictPublish(u.id, v.reason.trim() || undefined);
+        load();
+      },
+    });
+  }
+
+  function flag(u: UserRow) {
+    setModal({
+      title: `${t('flagAbnormal')} · ${u.nickname}`,
+      destructive: true,
+      submitLabel: t('flagAbnormal'),
+      fields: [{ name: 'reason', label: t('reasonOptional'), kind: 'textarea' }],
+      onSubmit: async (v) => {
+        await adminApi.flagUser(u.id, v.reason.trim() || undefined);
+        load();
+      },
+    });
+  }
+
   return (
     <AppShell title={t('users')} description={t('usersDesc')}>
       <PageHeader title={t('users')} description={`${filtered.length} ${t('usersCount')}`} />
@@ -210,6 +250,19 @@ export default function UsersPage() {
                         <DropdownMenuItem onSelect={() => navigate(`/users/${u.id}#orders`)}>
                           <ShoppingBag className="mr-2 h-4 w-4" />
                           {t('viewOrders')}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => mute(u)}>
+                          <MicOff className="mr-2 h-4 w-4" />
+                          {t('mute')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => restrict(u)}>
+                          <Send className="mr-2 h-4 w-4" />
+                          {t('restrictPublish')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => flag(u)}>
+                          <Flag className="mr-2 h-4 w-4" />
+                          {t('flagAbnormal')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {u.accountStatus === 'banned' ? (

@@ -14,8 +14,12 @@ import ReportsPage from './pages/ReportsPage';
 import ReportDetailPage from './pages/ReportDetailPage';
 import OrdersPage from './pages/OrdersPage';
 import OrderDetailPage from './pages/OrderDetailPage';
-import DisputesPage from './pages/DisputesPage';
-import ConfigPage from './pages/ConfigPage';
+import ReviewsPage from './pages/ReviewsPage';
+import ReviewDetailPage from './pages/ReviewDetailPage';
+import ChatRiskPage from './pages/ChatRiskPage';
+import CategoriesPage from './pages/CategoriesPage';
+import BannersPage from './pages/BannersPage';
+import SystemConfigPage from './pages/SystemConfigPage';
 import type { ReactNode } from 'react';
 
 // Cached once per session so the admin check doesn't re-run (and flash a spinner) on every
@@ -79,117 +83,56 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return children;
 }
 
+/** Wraps a page in the admin auth guard — keeps the route table readable. */
+function Guard({ children }: { children: ReactNode }) {
+  return <RequireAuth>{children}</RequireAuth>;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
-    <Routes>
+      <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <DashboardPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/users"
-          element={
-            <RequireAuth>
-              <UsersPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/users/:userId"
-          element={
-            <RequireAuth>
-              <UserDetailPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/verifications"
-          element={
-            <RequireAuth>
-              <VerificationsPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/verifications/:submissionId"
-          element={
-            <RequireAuth>
-              <VerificationDetailPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/content"
-          element={
-            <RequireAuth>
-              <ContentPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/content/:listingId"
-          element={
-            <RequireAuth>
-              <ContentDetailPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/reports"
-          element={
-            <RequireAuth>
-              <ReportsPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/reports/:reportId"
-          element={
-            <RequireAuth>
-              <ReportDetailPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/orders"
-          element={
-            <RequireAuth>
-              <OrdersPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/orders/:orderId"
-          element={
-            <RequireAuth>
-              <OrderDetailPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/disputes"
-          element={
-            <RequireAuth>
-              <DisputesPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/config"
-          element={
-            <RequireAuth>
-              <ConfigPage />
-            </RequireAuth>
-          }
-        />
+        <Route path="/" element={<Guard><DashboardPage /></Guard>} />
+
+        {/* 用户管理 */}
+        <Route path="/users" element={<Guard><UsersPage /></Guard>} />
+        <Route path="/users/:userId" element={<Guard><UserDetailPage /></Guard>} />
+
+        {/* 商品管理 (all listings) + 发布审核 (review queue) share ContentPage via `mode`. */}
+        <Route path="/products" element={<Guard><ContentPage mode="all" /></Guard>} />
+        <Route path="/content" element={<Guard><ContentPage mode="review" /></Guard>} />
+        <Route path="/content/:listingId" element={<Guard><ContentDetailPage /></Guard>} />
+
+        {/* 订单/交易 (disputes merged in via ?filter=disputes) */}
+        <Route path="/orders" element={<Guard><OrdersPage /></Guard>} />
+        <Route path="/orders/:orderId" element={<Guard><OrderDetailPage /></Guard>} />
+        {/* Disputes merged into Orders — keep the old path working. */}
+        <Route path="/disputes" element={<Navigate to="/orders?filter=disputes" replace />} />
+
+        {/* 评价管理 */}
+        <Route path="/reviews" element={<Guard><ReviewsPage /></Guard>} />
+        <Route path="/reviews/:reviewId" element={<Guard><ReviewDetailPage /></Guard>} />
+
+        {/* 举报管理 */}
+        <Route path="/reports" element={<Guard><ReportsPage /></Guard>} />
+        <Route path="/reports/:reportId" element={<Guard><ReportDetailPage /></Guard>} />
+
+        {/* 聊天风控 */}
+        <Route path="/chat-risk" element={<Guard><ChatRiskPage /></Guard>} />
+
+        {/* 认证管理 */}
+        <Route path="/verifications" element={<Guard><VerificationsPage /></Guard>} />
+        <Route path="/verifications/:submissionId" element={<Guard><VerificationDetailPage /></Guard>} />
+
+        {/* 平台配置: 分类 / Banner / 系统配置 */}
+        <Route path="/config" element={<Navigate to="/config/categories" replace />} />
+        <Route path="/config/categories" element={<Guard><CategoriesPage /></Guard>} />
+        <Route path="/config/banners" element={<Guard><BannersPage /></Guard>} />
+        <Route path="/config/system" element={<Guard><SystemConfigPage /></Guard>} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
     </ErrorBoundary>
   );
 }

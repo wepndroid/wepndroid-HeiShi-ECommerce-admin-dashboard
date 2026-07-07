@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { adminApi, type OrderRow } from '@/api/client';
@@ -13,11 +13,21 @@ import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 
 const isDispute = (o: OrderRow) => o.status === 'inDispute' || o.status === 'refundInProgress';
+const isRefund = (o: OrderRow) =>
+  o.status === 'cancelled' || o.status === 'refundInProgress' || o.paymentStatus === 'refundInProgress';
+
+type OrderFilter = 'all' | 'disputes' | 'refunds';
 
 export default function OrdersPage() {
   const { t } = useI18n();
   const [items, setItems] = useState<OrderRow[]>([]);
   const [error, setError] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterParam = searchParams.get('filter');
+  const filter: OrderFilter =
+    filterParam === 'disputes' ? 'disputes' : filterParam === 'refunds' ? 'refunds' : 'all';
+  const disputesOnly = filter === 'disputes';
+  const refundsOnly = filter === 'refunds';
 
   const load = useCallback(() => {
     adminApi.orders().then((res) => setItems(res.items))
@@ -32,9 +42,30 @@ export default function OrdersPage() {
     return { revenue, disputed, paid };
   }, [items]);
 
+  const visibleItems = useMemo(() => {
+    if (disputesOnly) return items.filter(isDispute);
+    if (refundsOnly) return items.filter(isRefund);
+    return items;
+  }, [items, disputesOnly, refundsOnly]);
+
+  const setFilter = (next: OrderFilter) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (next === 'all') params.delete('filter');
+      else params.set('filter', next);
+      return params;
+    });
+  };
+
   return (
     <AppShell title={t('orders')} description={t('ordersDesc')}>
-      <PageHeader title={t('orders')} description={t('ordersPageDesc')} />
+      <PageHeader title={t('orders')} description={disputesOnly ? t('filterDisputes') : refundsOnly ? t('refundRecords') : t('ordersPageDesc')} />
+
+      <div className="mb-5 inline-flex rounded-md border border-border bg-muted/40 p-1">
+        <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} onClick={() => setFilter('all')}>{t('tabAll')}</Button>
+        <Button size="sm" variant={filter === 'disputes' ? 'default' : 'ghost'} onClick={() => setFilter('disputes')}>{t('filterDisputes')}</Button>
+        <Button size="sm" variant={filter === 'refunds' ? 'default' : 'ghost'} onClick={() => setFilter('refunds')}>{t('filterRefunds')}</Button>
+      </div>
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
@@ -53,8 +84,8 @@ export default function OrdersPage() {
       </div>
 
       {error ? <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
-      {items.length === 0 ? (
-        <EmptyState icon={<ShoppingBag className="h-5 w-5" />} title={t('noItems')} description={t('emptyOrders')} />
+      {visibleItems.length === 0 ? (
+        <EmptyState icon={<ShoppingBag className="h-5 w-5" />} title={t('noItems')} description={disputesOnly ? t('emptyDisputes') : refundsOnly ? t('emptyRefunds') : t('emptyOrders')} />
       ) : (
         <DataTable>
           <THead>
@@ -65,10 +96,11 @@ export default function OrdersPage() {
             <TH>{t('amount')}</TH>
             <TH>{t('status')}</TH>
             <TH>{t('paymentStatus')}</TH>
+            <TH>{t('orderTime')}</TH>
             <TH className="text-right">{t('actions')}</TH>
           </THead>
           <TBody>
-            {items.map((row) => (
+            {visibleItems.map((row) => (
               <TR key={row.id}>
                 <TD className="font-mono text-xs text-muted-foreground">#{row.id}</TD>
                 <TD className="max-w-[240px] truncate font-medium">{row.title ?? '—'}</TD>
@@ -85,6 +117,7 @@ export default function OrdersPage() {
                 <TD className="font-semibold">${row.amount}</TD>
                 <TD><StatusBadge status={row.status} /></TD>
                 <TD>{row.paymentStatus ? <StatusBadge status={row.paymentStatus} /> : '—'}</TD>
+                <TD className="whitespace-nowrap text-xs text-muted-foreground">{row.createdAt ? new Date(row.createdAt).toLocaleString() : '—'}</TD>
                 <TD className="text-right">
                   <Button asChild size="sm" variant="ghost">
                     <Link to={`/orders/${row.id}`}>{t('view')}</Link>

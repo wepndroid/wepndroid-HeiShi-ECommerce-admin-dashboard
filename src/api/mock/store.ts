@@ -23,7 +23,7 @@ import type {
 
 const DB_KEY = 'heymarket_admin_mock_db';
 // Bump when the seed shape changes so persisted localStorage reseeds with new fields.
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 export type TranscriptMsg = { senderId: string; text: string; sentAt: string | null };
 
@@ -190,12 +190,12 @@ function seed(): MockDb {
   };
 
   const orders: OrderDetail[] = [
-    { id: 1, buyer: party('u8'), seller: party('u1'), title: 'iPhone 13 128GB', amount: 650, status: 'pendingReceive', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_1', createdAt: daysAgo(3), listingId: 1, escrowFee: 0.99, paymentMethod: 'card', psp: 'stripe', pspPaymentId: 'pi_sim_1', payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
-    { id: 2, buyer: party('u3'), seller: party('u1'), title: 'IKEA study desk', amount: 80, status: 'completed', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_2', createdAt: daysAgo(20), listingId: 2, escrowFee: 0.99, paymentMethod: 'paypal', psp: 'paypal', pspPaymentId: 'pp_sim_2', payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
-    { id: 3, buyer: party('u8'), seller: party('u5'), title: 'Two-person moving help', amount: 120, status: 'inDispute', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_3', createdAt: daysAgo(6), listingId: 3, escrowFee: 0.99, paymentMethod: 'card', psp: 'stripe', pspPaymentId: 'pi_sim_3', payoutPaused: true, isAbnormal: false, adminNotes: null, disputeStatus: 'open', disputeReason: 'Service not delivered as agreed.' },
-    { id: 4, buyer: party('u2'), seller: party('u3'), title: 'Sony A6400 camera', amount: 420, status: 'pendingPay', paymentStatus: 'pending', pspTransactionId: null, createdAt: daysAgo(1), listingId: 9, escrowFee: 0.99, paymentMethod: null, psp: null, pspPaymentId: null, payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
-    { id: 5, buyer: party('u5'), seller: party('u1'), title: 'Carlton room sublet', amount: 260, status: 'refundInProgress', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_5', createdAt: daysAgo(9), listingId: 5, escrowFee: 0.99, paymentMethod: 'card', psp: 'stripe', pspPaymentId: 'pi_sim_5', payoutPaused: true, isAbnormal: true, adminNotes: 'Buyer requested refund.', disputeStatus: 'open', disputeReason: 'Room already taken on arrival.' },
-    { id: 6, buyer: party('u8'), seller: party('u5'), title: 'End-of-lease cleaning', amount: 90, status: 'pendingShip', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_6', createdAt: daysAgo(2), listingId: 7, escrowFee: 0.99, paymentMethod: 'wechat', psp: 'stripe', pspPaymentId: 'pi_sim_6', payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
+    { id: 1, buyer: party('u8'), seller: party('u1'), title: 'iPhone 13 128GB', amount: 650, status: 'pendingReceive', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_1', createdAt: daysAgo(3), listingId: 1, escrowFee: 0, paymentMethod: 'card', psp: 'stripe', pspPaymentId: 'pi_sim_1', payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
+    { id: 2, buyer: party('u3'), seller: party('u1'), title: 'IKEA study desk', amount: 80, status: 'completed', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_2', createdAt: daysAgo(20), listingId: 2, escrowFee: 0, paymentMethod: 'paypal', psp: 'paypal', pspPaymentId: 'pp_sim_2', payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
+    { id: 3, buyer: party('u8'), seller: party('u5'), title: 'Two-person moving help', amount: 120, status: 'inDispute', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_3', createdAt: daysAgo(6), listingId: 3, escrowFee: 0, paymentMethod: 'card', psp: 'stripe', pspPaymentId: 'pi_sim_3', payoutPaused: true, isAbnormal: false, adminNotes: null, disputeStatus: 'open', disputeReason: 'Service not delivered as agreed.' },
+    { id: 4, buyer: party('u2'), seller: party('u3'), title: 'Sony A6400 camera', amount: 420, status: 'pendingPay', paymentStatus: 'pending', pspTransactionId: null, createdAt: daysAgo(1), listingId: 9, escrowFee: 0, paymentMethod: null, psp: null, pspPaymentId: null, payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
+    { id: 5, buyer: party('u5'), seller: party('u1'), title: 'Carlton room sublet', amount: 260, status: 'refundInProgress', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_5', createdAt: daysAgo(9), listingId: 5, escrowFee: 0, paymentMethod: 'card', psp: 'stripe', pspPaymentId: 'pi_sim_5', payoutPaused: true, isAbnormal: true, adminNotes: 'Buyer requested refund.', disputeStatus: 'open', disputeReason: 'Room already taken on arrival.' },
+    { id: 6, buyer: party('u8'), seller: party('u5'), title: 'End-of-lease cleaning', amount: 90, status: 'pendingShip', paymentStatus: 'succeeded', pspTransactionId: 'pi_sim_6', createdAt: daysAgo(2), listingId: 7, escrowFee: 0, paymentMethod: 'wechat', psp: 'stripe', pspPaymentId: 'pi_sim_6', payoutPaused: false, isAbnormal: false, adminNotes: null, disputeStatus: null, disputeReason: null },
   ];
 
   const categories: CategoryRow[] = [
@@ -251,6 +251,7 @@ function seed(): MockDb {
     'home.module.categories': 'on',
     'home.module.recommended': 'on',
     'home.module.graduationZone': 'on',
+    'payments.escrowFee': '0',
     'legal.userAgreement': 'By using HeyMarket you agree to trade responsibly and follow all local laws.',
     'legal.privacyPolicy': 'We collect only what is needed to run the marketplace and never sell your data.',
   };

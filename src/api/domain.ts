@@ -23,7 +23,15 @@ export type BundleItemStatus = 'available' | 'onHold' | 'sold';
 // PSP-driven payment lifecycle — union of the exact values used in the mock store seed and
 // admin transitions (store.ts: 'succeeded' | 'pending'; resolveDispute: 'refundInProgress';
 // OrdersPage totals also recognise 'paid').
-export type PaymentStatus = 'pending' | 'paid' | 'succeeded' | 'refundInProgress';
+export type PaymentStatus =
+  | 'pending'
+  | 'paid'
+  | 'succeeded'
+  | 'approved'
+  | 'created'
+  | 'refundInProgress'
+  | 'refunded'
+  | 'cancelled';
 
 /** A user reference embedded in another record (mirrors mobile's nested seller/buyer). */
 export interface Party {

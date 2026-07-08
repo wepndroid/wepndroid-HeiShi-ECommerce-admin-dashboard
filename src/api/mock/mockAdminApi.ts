@@ -153,6 +153,7 @@ export const mockAdminApi: AdminApi = {
       totalListings: db.content.length,
       activeListingCount: db.content.filter((c) => c.status === 'active').length,
       pendingReviewCount: db.content.filter((c) => c.reviewStatus === 'pendingReview').length,
+      pendingProductCount: db.content.filter((c) => c.reviewStatus === 'pendingReview' && c.type === 'product').length,
       reportCount: db.reports.filter((r) => r.status === 'pending').length,
       orderCount: db.orders.length,
       completedTradeCount: db.orders.filter((o) => o.status === 'completed').length,
@@ -531,7 +532,29 @@ export const mockAdminApi: AdminApi = {
     return mutate((db) => {
       const o = db.orders.find((x) => x.id === id) ?? notFound('Order');
       o.payoutPaused = true;
+      o.payoutStatus = o.payoutStatus === 'released' || o.payoutStatus === 'reversed' ? o.payoutStatus : 'blocked';
+      o.payoutFailureCode = o.payoutStatus === 'released' ? o.payoutFailureCode ?? null : 'PAYOUT_PAUSED';
+      o.payoutFailureReason = o.payoutStatus === 'released' ? o.payoutFailureReason ?? null : 'Payout was paused by an administrator';
       return OK;
+    });
+  },
+  async releasePayout(id: number) {
+    return mutate((db) => {
+      const o = db.orders.find((x) => x.id === id) ?? notFound('Order');
+      if (o.payoutPaused) {
+        o.payoutStatus = 'blocked';
+        o.payoutFailureCode = 'PAYOUT_PAUSED';
+        o.payoutFailureReason = 'Payout is paused on this order';
+        return { ok: true, status: 'blocked', reference: o.payoutReference ?? null };
+      }
+      o.payoutStatus = 'released';
+      o.payoutProvider = 'stripe';
+      o.payoutReference = o.payoutReference ?? `tr_mock_${id}`;
+      o.payoutReleasedAt = new Date().toISOString();
+      o.payoutFailureCode = null;
+      o.payoutFailureReason = null;
+      o.payoutFailedAt = null;
+      return { ok: true, status: 'released', reference: o.payoutReference };
     });
   },
   async markAbnormal(id: number) {
@@ -555,12 +578,28 @@ export const mockAdminApi: AdminApi = {
         o.status = 'refundInProgress';
         o.paymentStatus = 'refundInProgress';
         o.payoutPaused = true;
+        if (o.payoutStatus === 'released') {
+          o.payoutStatus = 'reversed';
+          o.payoutReversedAt = new Date().toISOString();
+          o.payoutReversalReference = `trr_mock_${id}`;
+        }
       } else if (resolution === 'complete') {
         o.status = 'completed';
         o.payoutPaused = false;
+        o.payoutStatus = 'released';
+        o.payoutProvider = 'stripe';
+        o.payoutReference = o.payoutReference ?? `tr_mock_${id}`;
+        o.payoutReleasedAt = o.payoutReleasedAt ?? new Date().toISOString();
+        o.payoutFailureCode = null;
+        o.payoutFailureReason = null;
       } else if (resolution === 'cancel') {
         o.status = 'cancelled';
         o.payoutPaused = true;
+        if (o.payoutStatus === 'released') {
+          o.payoutStatus = 'reversed';
+          o.payoutReversedAt = new Date().toISOString();
+          o.payoutReversalReference = `trr_mock_${id}`;
+        }
       }
       o.disputeStatus = 'resolved';
       o.adminNotes = note || o.adminNotes;

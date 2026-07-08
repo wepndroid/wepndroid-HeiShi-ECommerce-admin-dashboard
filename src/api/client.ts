@@ -68,6 +68,7 @@ export type DashboardStats = {
   totalListings: number;
   activeListingCount: number;
   pendingReviewCount: number;
+  pendingProductCount: number;
   reportCount: number;
   orderCount: number;
   completedTradeCount: number;
@@ -225,6 +226,16 @@ export type OrderDetail = OrderRow & {
   psp: string | null;
   pspPaymentId: string | null;
   payoutPaused: boolean;
+  payoutStatus?: string | null;
+  payoutProvider?: string | null;
+  payoutMethodId?: string | null;
+  payoutReference?: string | null;
+  payoutFailureCode?: string | null;
+  payoutFailureReason?: string | null;
+  payoutReleasedAt?: string | null;
+  payoutFailedAt?: string | null;
+  payoutReversedAt?: string | null;
+  payoutReversalReference?: string | null;
   isAbnormal: boolean;
   adminNotes: string | null;
   disputeStatus: string | null;
@@ -469,6 +480,8 @@ const realAdminApi = {
   order: (id: number) => request<OrderDetail>(`/v1/admin/orders/${id}`),
   orderChat: (id: number) => request<{ messages: ChatMessage[] }>(`/v1/admin/orders/${id}/chat`),
   pausePayout: (id: number) => request<{ ok: boolean }>(`/v1/admin/orders/${id}/pause-payout`, { method: 'POST' }),
+  releasePayout: (id: number) =>
+    request<{ ok: boolean; status: string; reference?: string | null }>(`/v1/admin/orders/${id}/release-payout`, { method: 'POST' }),
   markAbnormal: (id: number) =>
     request<{ ok: boolean }>(`/v1/admin/orders/${id}/mark-abnormal`, { method: 'POST' }),
   setOrderNotes: (id: number, note: string) =>
@@ -614,8 +627,8 @@ const realAdminApi = {
 /** Full admin API surface — the mock must implement every method. */
 export type AdminApi = typeof realAdminApi;
 
-// Frontend + mock phase: default to the mock API (no backend). Set VITE_ADMIN_USE_MOCK=false
-// to talk to the real /v1/admin backend once it is available.
-const USE_MOCK = (import.meta.env.VITE_ADMIN_USE_MOCK as string | undefined) !== 'false';
+// Production-first: use the real /v1/admin backend by default.
+// Set VITE_ADMIN_USE_MOCK=true only when you intentionally want the local mock store.
+const USE_MOCK = (import.meta.env.VITE_ADMIN_USE_MOCK as string | undefined) === 'true';
 
 export const adminApi: AdminApi = USE_MOCK ? mockAdminApi : realAdminApi;

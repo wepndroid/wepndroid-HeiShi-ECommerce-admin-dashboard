@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Users,
   ShieldCheck,
-  FileSearch,
   Flag,
   ShoppingBag,
   Settings,
@@ -50,7 +49,7 @@ function SidebarContent({
   counts,
 }: {
   onNavigate?: () => void;
-  counts: { pendingReview: number; pendingVerification: number; reports: number; disputes: number };
+  counts: { pendingReview: number; pendingProduct: number; pendingVerification: number; reports: number; disputes: number };
 }) {
   const { t } = useI18n();
   const { pathname } = useLocation();
@@ -65,13 +64,7 @@ function SidebarContent({
       labelKey: 'navOperations',
       items: [
         { to: '/users', labelKey: 'users', icon: Users },
-        { to: '/products', labelKey: 'products', icon: Package },
-        {
-          to: '/content',
-          labelKey: 'contentReview',
-          icon: FileSearch,
-          count: counts.pendingReview || undefined,
-        },
+        { to: '/products', labelKey: 'products', icon: Package, count: counts.pendingProduct || undefined },
         {
           to: '/orders',
           labelKey: 'orders',
@@ -195,6 +188,7 @@ export function AppShell({
   const searchRef = useRef<HTMLInputElement>(null);
   const [counts, setCounts] = useState({
     pendingReview: 0,
+    pendingProduct: 0,
     pendingVerification: 0,
     reports: 0,
     disputes: 0,
@@ -206,6 +200,7 @@ export function AppShell({
       .then((s) =>
         setCounts({
           pendingReview: s.pendingReviewCount,
+          pendingProduct: s.pendingProductCount,
           pendingVerification: s.pendingVerificationCount,
           reports: s.reportCount,
           disputes: s.disputeOrderCount,

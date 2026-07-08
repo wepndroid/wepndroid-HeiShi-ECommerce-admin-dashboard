@@ -13,6 +13,7 @@ import { AppShell } from '@/components/admin/AppShell';
 import { PageHeader } from '@/components/admin/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -35,6 +36,7 @@ export default function SystemConfigPage() {
   const [reportReasons, setReportReasons] = useState<ReportReasonRow[]>([]);
   const [productTags, setProductTags] = useState<ProductTagRow[]>([]);
   const [values, setValues] = useState<PlatformSettings>({});
+  const [escrowFee, setEscrowFee] = useState('0');
   const [userAgreement, setUserAgreement] = useState('');
   const [privacyPolicy, setPrivacyPolicy] = useState('');
   const [saved, setSaved] = useState(false);
@@ -65,6 +67,7 @@ export default function SystemConfigPage() {
         setReportReasons(rr.items);
         setProductTags(pt.items);
         setValues(s.values);
+        setEscrowFee(s.values['payments.escrowFee'] ?? '0');
         setUserAgreement(s.values['legal.userAgreement'] ?? '');
         setPrivacyPolicy(s.values['legal.privacyPolicy'] ?? '');
       })
@@ -239,6 +242,21 @@ export default function SystemConfigPage() {
     window.setTimeout(() => setSaved(false), 2000);
   }
 
+  async function saveEscrowFee() {
+    const parsed = Number(escrowFee);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setError(t('escrowFeeInvalid'));
+      return;
+    }
+    setError('');
+    const normalized = parsed.toFixed(2).replace(/\.00$/, '');
+    await adminApi.patchSettings({ 'payments.escrowFee': normalized });
+    setValues((current) => ({ ...current, 'payments.escrowFee': normalized }));
+    setEscrowFee(normalized);
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 2000);
+  }
+
   const homeModuleLabels: Record<string, string> = {
     'home.module.banners': t('banners'),
     'home.module.categories': t('categories'),
@@ -380,6 +398,29 @@ export default function SystemConfigPage() {
 
         {/* Home & legal */}
         <TabsContent value="homeLegal" className="mt-4 space-y-4">
+          <Card className="space-y-4 p-4">
+            <div>
+              <p className="font-medium">{t('paymentsConfig')}</p>
+              <p className="text-xs text-muted-foreground">{t('paymentsConfigDesc')}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="payments-escrow-fee">{t('escrowFeeSettingLabel')}</Label>
+              <Input
+                id="payments-escrow-fee"
+                type="number"
+                min="0"
+                step="0.01"
+                value={escrowFee}
+                onChange={(e) => setEscrowFee(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">{t('escrowFeeSettingHint')}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button onClick={saveEscrowFee} size="sm">{t('saveChanges')}</Button>
+              {saved ? <span className="text-xs text-muted-foreground">{t('settingsSaved')}</span> : null}
+            </div>
+          </Card>
+
           <Card className="space-y-4 p-4">
             <div>
               <p className="font-medium">{t('homeModules')}</p>

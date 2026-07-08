@@ -14,7 +14,10 @@ import { Avatar } from '@/components/ui/avatar';
 
 const isDispute = (o: OrderRow) => o.status === 'inDispute' || o.status === 'refundInProgress';
 const isRefund = (o: OrderRow) =>
-  o.status === 'cancelled' || o.status === 'refundInProgress' || o.paymentStatus === 'refundInProgress';
+  o.status === 'cancelled' ||
+  o.status === 'refundInProgress' ||
+  o.paymentStatus === 'refundInProgress' ||
+  o.paymentStatus === 'refunded';
 
 type OrderFilter = 'all' | 'disputes' | 'refunds';
 
@@ -22,6 +25,7 @@ export default function OrdersPage() {
   const { t } = useI18n();
   const [items, setItems] = useState<OrderRow[]>([]);
   const [error, setError] = useState('');
+  const [liveNotice, setLiveNotice] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const filterParam = searchParams.get('filter');
   const filter: OrderFilter =
@@ -29,11 +33,38 @@ export default function OrdersPage() {
   const disputesOnly = filter === 'disputes';
   const refundsOnly = filter === 'refunds';
 
-  const load = useCallback(() => {
-    adminApi.orders().then((res) => setItems(res.items))
+  const snapshotOrders = useCallback(
+    (rows: OrderRow[]) =>
+      rows
+        .map((row) => [row.id, row.status, row.paymentStatus ?? '', row.pspTransactionId ?? ''].join(':'))
+        .join('|'),
+    [],
+  );
+
+  const load = useCallback((opts?: { silent?: boolean }) => {
+    adminApi.orders().then((res) => {
+      setItems((prev) => {
+        if (opts?.silent && prev.length > 0 && snapshotOrders(prev) !== snapshotOrders(res.items)) {
+          setLiveNotice(t('ordersUpdated'));
+        }
+        return res.items;
+      });
+      setError('');
+    })
       .catch((err) => setError(err instanceof Error ? err.message : t('error')));
-  }, [t]);
+  }, [snapshotOrders, t]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      load({ silent: true });
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+  useEffect(() => {
+    if (!liveNotice) return;
+    const timer = window.setTimeout(() => setLiveNotice(''), 4000);
+    return () => window.clearTimeout(timer);
+  }, [liveNotice]);
 
   const totals = useMemo(() => {
     const revenue = items.reduce((s, o) => s + (o.amount ?? 0), 0);
@@ -83,6 +114,11 @@ export default function OrdersPage() {
         ))}
       </div>
 
+      {liveNotice ? (
+        <p role="status" className="mb-4 rounded-md border border-[#7ad80b] bg-[#7ad80b] px-3 py-2 text-sm text-black">
+          {liveNotice}
+        </p>
+      ) : null}
       {error ? <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       {visibleItems.length === 0 ? (
         <EmptyState icon={<ShoppingBag className="h-5 w-5" />} title={t('noItems')} description={disputesOnly ? t('emptyDisputes') : refundsOnly ? t('emptyRefunds') : t('emptyOrders')} />

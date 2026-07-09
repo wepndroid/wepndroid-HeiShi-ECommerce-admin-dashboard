@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { adminApi, clearToken, getToken } from './api/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -88,6 +88,11 @@ function Guard({ children }: { children: ReactNode }) {
   return <RequireAuth>{children}</RequireAuth>;
 }
 
+function LegacyContentRedirect() {
+  const { listingId } = useParams<{ listingId?: string }>();
+  return <Navigate to={listingId ? `/products/${listingId}` : '/products'} replace />;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -99,10 +104,11 @@ export default function App() {
         <Route path="/users" element={<Guard><UsersPage /></Guard>} />
         <Route path="/users/:userId" element={<Guard><UserDetailPage /></Guard>} />
 
-        {/* 商品管理 (all listings) + 发布审核 (review queue) share ContentPage via `mode`. */}
+        {/* Product management detail now lives fully under /products. */}
         <Route path="/products" element={<Guard><ContentPage mode="all" /></Guard>} />
-        <Route path="/content" element={<Guard><ContentPage mode="review" /></Guard>} />
-        <Route path="/content/:listingId" element={<Guard><ContentDetailPage /></Guard>} />
+        <Route path="/products/:listingId" element={<Guard><ContentDetailPage /></Guard>} />
+        <Route path="/content" element={<LegacyContentRedirect />} />
+        <Route path="/content/:listingId" element={<LegacyContentRedirect />} />
 
         {/* 订单/交易 (disputes merged in via ?filter=disputes) */}
         <Route path="/orders" element={<Guard><OrdersPage /></Guard>} />

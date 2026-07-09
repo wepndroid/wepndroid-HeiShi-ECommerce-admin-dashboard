@@ -212,7 +212,7 @@ export default function ContentPage({ mode = 'review' }: { mode?: 'all' | 'revie
                 <TD className="text-muted-foreground">{item.createdAt ? new Date(item.createdAt).toLocaleString() : '—'}</TD>
                 <TD className="text-right">
                   <Button asChild size="sm" variant="ghost">
-                    <Link to={`/content/${item.id}`}>{isAll ? t('manage') : t('review')}</Link>
+                    <Link to={`/products/${item.id}`}>{isAll ? t('manage') : t('review')}</Link>
                   </Button>
                 </TD>
               </TR>

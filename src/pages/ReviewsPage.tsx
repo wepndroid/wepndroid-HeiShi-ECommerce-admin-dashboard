@@ -88,7 +88,7 @@ export default function ReviewsPage() {
                 </TD>
                 <TD className="max-w-[200px] truncate">
                   {row.listingId ? (
-                    <Link to={`/content/${row.listingId}`} className="text-primary hover:underline">
+                    <Link to={`/products/${row.listingId}`} className="text-primary hover:underline">
                       {row.listingTitle ?? `#${row.listingId}`}
                     </Link>
                   ) : (

@@ -90,7 +90,7 @@ export default function ReportDetailPage() {
                     <h3 className="text-sm font-semibold">{t('reportedContent')}</h3>
                     {/^\d+$/.test(detail.targetId) ? (
                       <Button asChild size="sm" variant="outline">
-                        <Link to={`/content/${detail.targetId}`}>{t('viewInContentReview')}</Link>
+                        <Link to={`/products/${detail.targetId}`}>{t('viewInContentReview')}</Link>
                       </Button>
                     ) : null}
                   </div>

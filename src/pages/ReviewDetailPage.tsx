@@ -148,7 +148,7 @@ export default function ReviewDetailPage() {
                   <h3 className="text-sm font-semibold">{t('relatedListing')}</h3>
                   {detail.listing ? (
                     <Button asChild size="sm" variant="outline">
-                      <Link to={`/content/${detail.listing.id}`}>{t('viewInContentReview')}</Link>
+                      <Link to={`/products/${detail.listing.id}`}>{t('viewInContentReview')}</Link>
                     </Button>
                   ) : null}
                 </div>

@@ -147,7 +147,7 @@ export default function OrderDetailPage() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold">{t('listingDetails')}</h3>
                   <Button asChild size="sm" variant="ghost">
-                    <Link to={`/content/${detail.listingId}`}>
+                    <Link to={`/products/${detail.listingId}`}>
                       <ExternalLink className="h-4 w-4" />
                       {t('viewListing')}
                     </Link>

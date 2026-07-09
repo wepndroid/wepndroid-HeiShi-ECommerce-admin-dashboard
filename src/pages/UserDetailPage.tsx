@@ -234,7 +234,7 @@ export default function UserDetailPage() {
               <ul className="divide-y divide-border">
                 {listings.length === 0 ? <li className="py-2 text-sm text-muted-foreground">{t('noItems')}</li> : listings.map((l) => (
                   <li key={l.id} className="flex items-center justify-between gap-3 py-2">
-                    <Link to={`/content/${l.id}`} className="truncate text-sm hover:underline">{l.title}</Link>
+                    <Link to={`/products/${l.id}`} className="truncate text-sm hover:underline">{l.title}</Link>
                     <StatusBadge status={l.reviewStatus} />
                   </li>
                 ))}

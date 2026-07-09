@@ -87,7 +87,7 @@ export default function ContentDetailPage() {
     setBusy(true);
     try {
       await adminApi.deleteContent(id);
-      navigate('/content');
+      navigate('/products');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('error'));
     } finally {
@@ -98,7 +98,7 @@ export default function ContentDetailPage() {
   return (
     <AppShell title={detail?.title ?? t('loading')} description={t('contentDetailDesc')}>
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
-        <Link to="/content"><ArrowLeft className="h-4 w-4" />{t('back')}</Link>
+        <Link to="/products"><ArrowLeft className="h-4 w-4" />{t('back')}</Link>
       </Button>
       {error ? <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       {!detail ? <p className="text-muted-foreground">{t('loading')}</p> : (

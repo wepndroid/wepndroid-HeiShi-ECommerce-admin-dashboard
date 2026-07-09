@@ -40,7 +40,7 @@ export default function DashboardPage() {
 
   const queues = [
     { label: t('verifications'), to: '/verifications', count: stats?.pendingVerificationCount ?? 0 },
-    { label: t('contentReview'), to: '/content', count: stats?.pendingReviewCount ?? 0 },
+    { label: t('products'), to: '/products', count: stats?.pendingReviewCount ?? 0 },
     { label: t('reports'), to: '/reports', count: stats?.reportCount ?? 0 },
     { label: t('disputes'), to: '/orders?filter=disputes', count: stats?.disputeOrderCount ?? 0 },
   ];

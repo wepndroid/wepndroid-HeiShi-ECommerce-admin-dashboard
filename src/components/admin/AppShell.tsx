@@ -236,7 +236,7 @@ export function AppShell({
     counts.pendingReview + counts.pendingVerification + counts.reports + counts.disputes;
   const queueLinks = [
     { to: '/verifications', label: t('verifications'), count: counts.pendingVerification },
-    { to: '/content', label: t('contentReview'), count: counts.pendingReview },
+    { to: '/products', label: t('products'), count: counts.pendingReview },
     { to: '/reports', label: t('reports'), count: counts.reports },
     { to: '/orders?filter=disputes', label: t('disputes'), count: counts.disputes },
   ];

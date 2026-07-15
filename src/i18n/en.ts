@@ -167,6 +167,7 @@ export const en = {
   openNav: 'Open navigation',
   closeNav: 'Close navigation',
   notifications: 'Notifications',
+  markAllRead: 'Mark all read',
   usersDesc: 'Search, inspect, and moderate marketplace accounts.',
   usersCount: 'accounts on this page',
   searchUsersPlaceholder: 'Search by name, phone, or ID…',

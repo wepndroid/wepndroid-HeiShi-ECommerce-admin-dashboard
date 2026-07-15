@@ -40,6 +40,72 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+export type AdminNotificationRow = {
+  id: string;
+  eventType: string;
+  title: string;
+  body: string;
+  targetType: string;
+  targetId: string;
+  actionPath: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export function fetchAdminNotifications() {
+  return request<{ items: AdminNotificationRow[]; unreadCount: number }>('/v1/admin/notifications');
+}
+
+export function markAdminNotificationRead(id: string) {
+  return request<void>(`/v1/admin/notifications/${id}/read`, { method: 'POST' });
+}
+
+export function markAllAdminNotificationsRead() {
+  return request<void>('/v1/admin/notifications/read-all', { method: 'POST' });
+}
+
+export function subscribeAdminNotifications(
+  onNotification: (notification: AdminNotificationRow) => void,
+): () => void {
+  const controller = new AbortController();
+
+  const connect = async () => {
+    while (!controller.signal.aborted) {
+      try {
+        const token = getToken();
+        const response = await fetch('/v1/admin/notifications/stream', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (!controller.signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop() ?? '';
+          for (const event of events) {
+            const data = event
+              .split('\n')
+              .find((line) => line.startsWith('data: '))
+              ?.slice(6);
+            if (data) onNotification(JSON.parse(data) as AdminNotificationRow);
+          }
+        }
+      } catch {
+        if (controller.signal.aborted) return;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    }
+  };
+
+  void connect();
+  return () => controller.abort();
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) {

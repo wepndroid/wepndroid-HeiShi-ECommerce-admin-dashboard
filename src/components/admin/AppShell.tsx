@@ -20,7 +20,15 @@ import {
   Layers,
 } from 'lucide-react';
 import { useI18n } from '@/i18n';
-import { adminApi, clearToken } from '@/api/client';
+import {
+  adminApi,
+  clearToken,
+  fetchAdminNotifications,
+  markAdminNotificationRead,
+  markAllAdminNotificationsRead,
+  subscribeAdminNotifications,
+  type AdminNotificationRow,
+} from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -193,6 +201,9 @@ export function AppShell({
     reports: 0,
     disputes: 0,
   });
+  const [adminNotifications, setAdminNotifications] = useState<AdminNotificationRow[]>([]);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const notificationIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     adminApi
@@ -208,6 +219,40 @@ export function AppShell({
       )
       .catch(() => undefined);
   }, [title]);
+
+  useEffect(() => {
+    fetchAdminNotifications()
+      .then(({ items, unreadCount }) => {
+        notificationIdsRef.current = new Set(items.map((item) => item.id));
+        setAdminNotifications(items);
+        setNotificationUnreadCount(unreadCount);
+      })
+      .catch(() => undefined);
+
+    return subscribeAdminNotifications((notification) => {
+      const isNew = !notificationIdsRef.current.has(notification.id);
+      notificationIdsRef.current.add(notification.id);
+      setAdminNotifications((current) => [
+        notification,
+        ...current.filter((item) => item.id !== notification.id),
+      ].slice(0, 30));
+      if (isNew && !notification.isRead) {
+        setNotificationUnreadCount((count) => count + 1);
+      }
+      adminApi
+        .stats()
+        .then((stats) =>
+          setCounts({
+            pendingReview: stats.pendingReviewCount,
+            pendingProduct: stats.pendingProductCount,
+            pendingVerification: stats.pendingVerificationCount,
+            reports: stats.reportCount,
+            disputes: stats.disputeOrderCount,
+          }),
+        )
+        .catch(() => undefined);
+    });
+  }, []);
 
   // ⌘K / Ctrl+K focuses the global search, matching the visible hint.
   useEffect(() => {
@@ -230,6 +275,23 @@ export function AppShell({
   function logout() {
     clearToken();
     navigate('/login');
+  }
+
+  function openNotification(notification: AdminNotificationRow) {
+    if (!notification.isRead) {
+      void markAdminNotificationRead(notification.id);
+      setAdminNotifications((current) =>
+        current.map((item) => item.id === notification.id ? { ...item, isRead: true } : item),
+      );
+      setNotificationUnreadCount((count) => Math.max(0, count - 1));
+    }
+    navigate(notification.actionPath);
+  }
+
+  function readAllNotifications() {
+    void markAllAdminNotificationsRead();
+    setAdminNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+    setNotificationUnreadCount(0);
   }
 
   const pendingTotal =
@@ -301,16 +363,44 @@ export function AppShell({
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" aria-label={t('notifications')} className="relative ml-auto h-8 w-8 md:ml-0">
                 <Bell className="h-4 w-4" />
-                {pendingTotal > 0 ? (
+                {notificationUnreadCount > 0 ? (
                   <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#7ad80b] ring-2 ring-background" />
                 ) : null}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel>{t('queueHealth')}</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel className="flex items-center justify-between">
+                <span>{t('notifications')}</span>
+                {notificationUnreadCount > 0 ? (
+                  <button className="text-xs font-normal text-primary" onClick={readAllNotifications}>
+                    {t('markAllRead')}
+                  </button>
+                ) : null}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {pendingTotal === 0 ? (
+              {adminNotifications.length === 0 ? (
                 <div className="px-2 py-4 text-center text-xs text-muted-foreground">{t('allCaughtUp')}</div>
+              ) : (
+                adminNotifications.slice(0, 8).map((notification) => (
+                  <DropdownMenuItem
+                    key={notification.id}
+                    className="block cursor-pointer py-2"
+                    onSelect={() => openNotification(notification)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', notification.isRead ? 'bg-muted' : 'bg-[#7ad80b]')} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{notification.title}</p>
+                        <p className="line-clamp-2 text-xs text-muted-foreground">{notification.body}</p>
+                      </div>
+                    </div>
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>{t('queueHealth')}</DropdownMenuLabel>
+              {pendingTotal === 0 ? (
+                <div className="px-2 py-3 text-center text-xs text-muted-foreground">{t('allCaughtUp')}</div>
               ) : (
                 queueLinks
                   .filter((q) => q.count > 0)

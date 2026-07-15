@@ -169,6 +169,7 @@ export const zh: Messages = {
   openNav: '打开导航',
   closeNav: '关闭导航',
   notifications: '通知',
+  markAllRead: '全部已读',
   usersDesc: '搜索、查看并管理平台用户账号。',
   usersCount: '条本页记录',
   searchUsersPlaceholder: '按昵称、手机号或 ID 搜索…',

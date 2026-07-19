@@ -107,15 +107,13 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
+      <div className="flex h-14 shrink-0 items-center gap-3 border-b border-sidebar-border px-4">
         <img
-          src="/brand-logo.png"
+          src="/app-icon.png"
           alt="HeyMarket"
-          className="h-7 w-7 shrink-0 rounded-md object-cover ring-1 ring-white/15"
+          className="h-8 w-8 shrink-0 rounded-lg object-contain"
         />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-white">HeyMarket</p>
-        </div>
+        <div className="min-w-0 flex-1" />
         <Badge
           variant="outline"
           className="border-white/15 bg-white/5 px-1.5 py-0 text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/70"

@@ -69,11 +69,11 @@ export default function LoginPage() {
         </div>
 
         <Card className="border-border/70 bg-card/95 p-8 shadow-[var(--shadow-elevated)] backdrop-blur">
-          <div className="mb-6 flex items-center gap-3">
+          <div className="mb-6 flex items-center gap-4">
             <img
-              src="/brand-logo.png"
+              src="/app-icon.png"
               alt="HeyMarket"
-              className="h-11 w-11 shrink-0 rounded-xl object-cover shadow-md"
+              className="h-12 w-12 shrink-0 rounded-xl object-contain shadow-md"
             />
             <div>
               <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('appTitle')}</p>

@@ -52,6 +52,100 @@ export type AdminNotificationRow = {
   createdAt: string;
 };
 
+export type SupportMessageRow = {
+  id: string;
+  senderId: number;
+  senderRole: 'buyer' | 'seller' | 'both' | 'admin';
+  body: string;
+  officialPlatformMessage: boolean;
+  readAt: string | null;
+  createdAt: string;
+};
+
+export type SupportConversationRow = {
+  id: string;
+  type: string;
+  adminId: number | null;
+  userId: number;
+  userRoleContext: 'buyer' | 'seller' | 'both';
+  orderId: number | null;
+  subject: string;
+  status: string;
+  messages: SupportMessageRow[];
+};
+
+export type ExposureRuleRow = {
+  id: string;
+  productId: number;
+  ruleType: 'boost' | 'suppress' | 'pin' | 'exclude' | 'regional' | 'category';
+  exposureWeight: number;
+  targetRegion: string | null;
+  targetCategory: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  reason: string | null;
+  status: string;
+};
+
+export type ExposureRuleInput = Omit<ExposureRuleRow, 'id' | 'status'>;
+
+export function fetchSupportConversations(status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<SupportConversationRow[]>(`/v1/admin/support/conversations${query}`);
+}
+
+export function replyToSupportConversation(id: string, body: string) {
+  return request<SupportConversationRow>(`/v1/admin/support/conversations/${id}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function openSupportConversation(body: {
+  userId: string;
+  userRoleContext: 'buyer' | 'seller';
+  conversationType: 'BUYER_SUPPORT' | 'SELLER_SUPPORT' | 'ORDER_SUPPORT' | 'DISPUTE_SUPPORT' | 'ACCOUNT_REVIEW' | 'SYSTEM_SERVICE';
+  subject: string;
+  body: string;
+  orderId?: number;
+}) {
+  return request<SupportConversationRow>('/v1/admin/support/conversations', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function createRoleAnnouncement(body: {
+  audienceRole: 'buyer' | 'seller' | 'both';
+  userIds?: string[];
+  title: string;
+  titleZh?: string;
+  body: string;
+  bodyZh?: string;
+  deepLink?: string;
+}) {
+  return request<{ announcementId: string; recipientCount: number; created: number }>(
+    '/v1/admin/announcements',
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+}
+
+export function fetchExposureRules(status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<ExposureRuleRow[]>(`/v1/admin/exposure-rules${query}`);
+}
+
+export function createExposureRule(body: ExposureRuleInput) {
+  return request<ExposureRuleRow>('/v1/admin/exposure-rules', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deactivateExposureRule(id: string) {
+  return request<ExposureRuleRow>(`/v1/admin/exposure-rules/${id}`, { method: 'DELETE' });
+}
+
 export function fetchAdminNotifications() {
   return request<{ items: AdminNotificationRow[]; unreadCount: number }>('/v1/admin/notifications');
 }

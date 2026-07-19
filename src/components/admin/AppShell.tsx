@@ -18,6 +18,8 @@ import {
   MessageSquareWarning,
   Image as ImageIcon,
   Layers,
+  MessageCircle,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useI18n } from '@/i18n';
 import {
@@ -87,6 +89,7 @@ function SidebarContent({
       items: [
         { to: '/reports', labelKey: 'reports', icon: Flag, count: counts.reports || undefined },
         { to: '/chat-risk', labelKey: 'chatRisk', icon: MessageSquareWarning },
+        { to: '/support', labelKey: 'supportConversations', icon: MessageCircle },
         {
           to: '/verifications',
           labelKey: 'verifications',
@@ -101,6 +104,7 @@ function SidebarContent({
         { to: '/config/categories', labelKey: 'categoriesNav', icon: Layers },
         { to: '/config/banners', labelKey: 'bannersNav', icon: ImageIcon },
         { to: '/config/system', labelKey: 'systemConfig', icon: Settings },
+        { to: '/config/exposure', labelKey: 'exposureRules', icon: SlidersHorizontal },
       ],
     },
   ];

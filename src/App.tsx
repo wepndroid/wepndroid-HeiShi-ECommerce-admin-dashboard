@@ -20,6 +20,8 @@ import ChatRiskPage from './pages/ChatRiskPage';
 import CategoriesPage from './pages/CategoriesPage';
 import BannersPage from './pages/BannersPage';
 import SystemConfigPage from './pages/SystemConfigPage';
+import SupportPage from './pages/SupportPage';
+import ExposureRulesPage from './pages/ExposureRulesPage';
 import type { ReactNode } from 'react';
 
 // Cached once per session so the admin check doesn't re-run (and flash a spinner) on every
@@ -126,6 +128,7 @@ export default function App() {
 
         {/* 聊天风控 */}
         <Route path="/chat-risk" element={<Guard><ChatRiskPage /></Guard>} />
+        <Route path="/support" element={<Guard><SupportPage /></Guard>} />
 
         {/* 认证管理 */}
         <Route path="/verifications" element={<Guard><VerificationsPage /></Guard>} />
@@ -136,6 +139,7 @@ export default function App() {
         <Route path="/config/categories" element={<Guard><CategoriesPage /></Guard>} />
         <Route path="/config/banners" element={<Guard><BannersPage /></Guard>} />
         <Route path="/config/system" element={<Guard><SystemConfigPage /></Guard>} />
+        <Route path="/config/exposure" element={<Guard><ExposureRulesPage /></Guard>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

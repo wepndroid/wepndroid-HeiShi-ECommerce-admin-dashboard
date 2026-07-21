@@ -30,6 +30,10 @@ export default function SupportPage() {
   const [sending, setSending] = useState(false);
   const [recipientId, setRecipientId] = useState('');
   const [recipientRole, setRecipientRole] = useState<'buyer' | 'seller'>('buyer');
+  const [conversationType, setConversationType] = useState<
+    'BUYER_SUPPORT' | 'SELLER_SUPPORT' | 'ORDER_SUPPORT' | 'DISPUTE_SUPPORT' | 'ACCOUNT_REVIEW' | 'SYSTEM_SERVICE'
+  >('BUYER_SUPPORT');
+  const [supportOrderId, setSupportOrderId] = useState('');
   const [newSubject, setNewSubject] = useState('');
   const [newBody, setNewBody] = useState('');
   const [announcementRole, setAnnouncementRole] = useState<'buyer' | 'seller' | 'both'>('both');
@@ -75,13 +79,15 @@ export default function SupportPage() {
       const created = await openSupportConversation({
         userId: recipientId.trim(),
         userRoleContext: recipientRole,
-        conversationType: recipientRole === 'buyer' ? 'BUYER_SUPPORT' : 'SELLER_SUPPORT',
+        conversationType,
         subject: newSubject.trim(),
         body: newBody.trim(),
+        orderId: supportOrderId.trim() ? Number(supportOrderId) : undefined,
       });
       setItems((current) => [created, ...current]);
       setSelectedId(created.id);
       setRecipientId('');
+      setSupportOrderId('');
       setNewSubject('');
       setNewBody('');
     } catch (err) {
@@ -122,6 +128,36 @@ export default function SupportPage() {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="buyer">{t('buyer')}</SelectItem><SelectItem value="seller">{t('seller')}</SelectItem></SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>{t('conversationType')}</Label>
+            <Select
+              value={conversationType}
+              onValueChange={(value) => {
+                const next = value as typeof conversationType;
+                setConversationType(next);
+                if (next === 'BUYER_SUPPORT') setRecipientRole('buyer');
+                if (next === 'SELLER_SUPPORT') setRecipientRole('seller');
+              }}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="BUYER_SUPPORT">{t('buyerSupport')}</SelectItem>
+                <SelectItem value="SELLER_SUPPORT">{t('sellerSupport')}</SelectItem>
+                <SelectItem value="ORDER_SUPPORT">{t('orderSupport')}</SelectItem>
+                <SelectItem value="DISPUTE_SUPPORT">{t('disputeSupport')}</SelectItem>
+                <SelectItem value="ACCOUNT_REVIEW">{t('accountReview')}</SelectItem>
+                <SelectItem value="SYSTEM_SERVICE">{t('systemService')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>{t('orderId')} (optional)</Label>
+            <Input
+              inputMode="numeric"
+              value={supportOrderId}
+              onChange={(event) => setSupportOrderId(event.target.value.replace(/\D/g, ''))}
+            />
           </div>
           <div className="md:col-span-2"><Label>{t('subject')}</Label><Input value={newSubject} onChange={(e) => setNewSubject(e.target.value)} /></div>
           <div className="md:col-span-2"><Label>{t('message')}</Label><Textarea value={newBody} onChange={(e) => setNewBody(e.target.value)} rows={2} /></div>

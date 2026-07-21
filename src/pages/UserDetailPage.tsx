@@ -58,6 +58,18 @@ export default function UserDetailPage() {
   }
   async function unban() { await adminApi.unbanUser(userId!); load(); }
   async function saveNotes() { await adminApi.setUserNotes(userId!, notes); load(); }
+  function mergeAccount() {
+    setModal({
+      title: t('mergeAccount'),
+      destructive: true,
+      submitLabel: t('mergeAccount'),
+      fields: [{ name: 'destinationUserId', label: t('destinationUserId'), required: true }],
+      onSubmit: async (v) => {
+        await adminApi.mergeAccounts(userId!, v.destinationUserId.trim());
+        load();
+      },
+    });
+  }
 
   // Moderation: enabling mute/restrict/flag prompts for an optional reason via the shared modal.
   function mute() {
@@ -226,6 +238,16 @@ export default function UserDetailPage() {
             <Label htmlFor="notes" className="text-sm font-semibold">{t('adminNotes')}</Label>
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="mt-2" />
             <div className="mt-3 flex justify-end"><Button onClick={saveNotes} size="sm">{t('save')}</Button></div>
+          </Card>
+
+          <Card className="mt-6 p-5">
+            <h3 className="text-sm font-semibold">{t('mergeAccount')}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{t('mergeAccountDesc')}</p>
+            <div className="mt-3 flex justify-end">
+              <Button onClick={mergeAccount} variant="destructive" size="sm" disabled={user.accountStatus === 'merged'}>
+                {t('mergeAccount')}
+              </Button>
+            </div>
           </Card>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">

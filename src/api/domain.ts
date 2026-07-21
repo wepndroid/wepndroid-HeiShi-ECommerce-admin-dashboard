@@ -17,7 +17,7 @@ export type OrderStatus =
   | 'refundInProgress';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 export type ReportStatus = 'pending' | 'processed' | 'ignored';
-export type AccountStatus = 'normal' | 'banned';
+export type AccountStatus = 'normal' | 'banned' | 'suspended' | 'merged';
 export type BundleItemStatus = 'available' | 'onHold' | 'sold';
 
 // PSP-driven payment lifecycle — union of the exact values used in the mock store seed and

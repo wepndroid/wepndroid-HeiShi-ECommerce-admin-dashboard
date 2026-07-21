@@ -89,6 +89,7 @@ function SidebarContent({
       items: [
         { to: '/reports', labelKey: 'reports', icon: Flag, count: counts.reports || undefined },
         { to: '/chat-risk', labelKey: 'chatRisk', icon: MessageSquareWarning },
+        { to: '/media-review', labelKey: 'mediaReview', icon: ImageIcon },
         { to: '/support', labelKey: 'supportConversations', icon: MessageCircle },
         {
           to: '/verifications',

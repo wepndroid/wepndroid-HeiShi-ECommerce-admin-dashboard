@@ -203,6 +203,14 @@ export const mockAdminApi: AdminApi = {
       return OK;
     });
   },
+  async mergeAccounts(sourceUserId: string, destinationUserId: string) {
+    return mutate((db) => {
+      const source = db.users.find((x) => x.id === sourceUserId) ?? notFound('User');
+      db.users.find((x) => x.id === destinationUserId) ?? notFound('User');
+      source.accountStatus = 'merged';
+      return { ok: true, movedProviders: [] };
+    });
+  },
   async muteUser(id: string, reason = '') {
     return mutate((db) => {
       const u = db.users.find((x) => x.id === id) ?? notFound('User');

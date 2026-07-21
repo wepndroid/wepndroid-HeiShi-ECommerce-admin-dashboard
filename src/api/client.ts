@@ -54,7 +54,7 @@ export type AdminNotificationRow = {
 
 export type SupportMessageRow = {
   id: string;
-  senderId: number;
+  senderId: string;
   senderRole: 'buyer' | 'seller' | 'both' | 'admin';
   body: string;
   officialPlatformMessage: boolean;
@@ -65,8 +65,8 @@ export type SupportMessageRow = {
 export type SupportConversationRow = {
   id: string;
   type: string;
-  adminId: number | null;
-  userId: number;
+  adminId: string | null;
+  userId: string;
   userRoleContext: 'buyer' | 'seller' | 'both';
   orderId: number | null;
   subject: string;
@@ -84,10 +84,58 @@ export type ExposureRuleRow = {
   startTime: string | null;
   endTime: string | null;
   reason: string | null;
+  createdBy: string;
   status: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
-export type ExposureRuleInput = Omit<ExposureRuleRow, 'id' | 'status'>;
+export type ExposureRuleInput = Omit<
+  ExposureRuleRow,
+  'id' | 'createdBy' | 'status' | 'createdAt' | 'updatedAt'
+>;
+
+export type MediaAssetRow = {
+  id: string;
+  ownerId: string;
+  listingId: number | null;
+  mediaType: 'image' | 'video';
+  status: string;
+  moderationStatus: string;
+  contentType: string;
+  fileSize: number | null;
+  originalUrl: string | null;
+  thumbnailUrl: string | null;
+  variants: Record<string, string>;
+  width: number | null;
+  height: number | null;
+  durationSeconds: number | null;
+  processingError: string | null;
+  retryCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function fetchMediaAssets(moderationStatus?: string) {
+  const query = moderationStatus
+    ? `?moderationStatus=${encodeURIComponent(moderationStatus)}`
+    : '';
+  return request<MediaAssetRow[]>(`/v1/admin/media/assets${query}`);
+}
+
+export function moderateMediaAsset(
+  id: string,
+  decision: 'approve' | 'reject',
+  reason?: string,
+) {
+  return request<MediaAssetRow & { affectedListingIds?: number[] }>(
+    `/v1/admin/media/assets/${encodeURIComponent(id)}/moderation`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ decision, reason: reason?.trim() || null }),
+    },
+  );
+}
 
 export function fetchSupportConversations(status?: string) {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
@@ -144,6 +192,13 @@ export function createExposureRule(body: ExposureRuleInput) {
 
 export function deactivateExposureRule(id: string) {
   return request<ExposureRuleRow>(`/v1/admin/exposure-rules/${id}`, { method: 'DELETE' });
+}
+
+export function restoreNormalExposure(productId: number) {
+  return request<{ productId: number; deactivatedRuleCount: number; status: 'normal' }>(
+    `/v1/admin/exposure-rules/listings/${productId}/restore`,
+    { method: 'POST' },
+  );
 }
 
 export function fetchAdminNotifications() {
@@ -551,6 +606,11 @@ const realAdminApi = {
   unbanUser: (id: string) => request<{ ok: boolean }>(`/v1/admin/users/${id}/unban`, { method: 'POST' }),
   setUserNotes: (id: string, note: string) =>
     request<{ ok: boolean }>(`/v1/admin/users/${id}/notes`, { method: 'PATCH', body: JSON.stringify({ note }) }),
+  mergeAccounts: (sourceUserId: string, destinationUserId: string) =>
+    request<{ ok: boolean; movedProviders: string[] }>('/v1/admin/users/merge-accounts', {
+      method: 'POST',
+      body: JSON.stringify({ sourceUserId, destinationUserId }),
+    }),
   muteUser: (id: string, reason = '') =>
     request<{ ok: boolean }>(`/v1/admin/users/${id}/mute`, { method: 'POST', body: JSON.stringify({ reason }) }),
   unmuteUser: (id: string) => request<{ ok: boolean }>(`/v1/admin/users/${id}/unmute`, { method: 'POST' }),

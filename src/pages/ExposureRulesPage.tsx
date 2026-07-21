@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { SlidersHorizontal, Trash2 } from 'lucide-react';
+import { RotateCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
 import {
   createExposureRule,
   deactivateExposureRule,
   fetchExposureRules,
+  restoreNormalExposure,
   type ExposureRuleRow,
 } from '@/api/client';
 import { useI18n } from '@/i18n';
@@ -79,6 +80,15 @@ export default function ExposureRulesPage() {
     }
   }
 
+  async function restore(productId: number) {
+    try {
+      await restoreNormalExposure(productId);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('error'));
+    }
+  }
+
   return (
     <AppShell title={t('exposureRules')} description={t('exposureRulesDesc')}>
       <PageHeader title={t('exposureRules')} description={t('exposureRulesPageDesc')} />
@@ -126,9 +136,26 @@ export default function ExposureRulesPage() {
                 <TD className="max-w-[260px] truncate">{row.reason || '—'}</TD>
                 <TD><Badge variant={row.status === 'active' ? 'default' : 'outline'}>{row.status}</Badge></TD>
                 <TD className="text-right">
-                  <Button variant="ghost" size="icon" disabled={row.status !== 'active'} onClick={() => deactivate(row.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title={t('restoreNormalRanking')}
+                      disabled={row.status !== 'active'}
+                      onClick={() => restore(row.productId)}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title={t('removeExposureRule')}
+                      disabled={row.status !== 'active'}
+                      onClick={() => deactivate(row.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TD>
               </TR>
             ))}
